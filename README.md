@@ -36,13 +36,14 @@
 Видео кладутся в `valera/video/` с именами `1.mp4` … `7.mp4`.
 
 ### Озвучка «Ямщика»
-Все фразы заранее озвучены нейросетевыми голосами Piper (Дмитрий, Денис, Руслан, Ирина; бесплатно, без интернета) — файлы в `valera/voice/`, словарь `valera/voices.js`.
+Все фразы заранее озвучены нейросетевыми голосами (бесплатно, без интернета): Piper — Дмитрий, Денис, Руслан, Ирина; станичные персонажи говорят «балачкой» — украинская модель Piper (Лада, Микита, Тетяна); формальные — MMS (Meta) — файлы в `valera/voice/`, словарь `valera/voices.js`.
 У каждого персонажа своя настройка голоса и обработка (`VOICES` в `tools/build_voices_neural.py`), ударения — словарь `STRESS` там же (номер ударного слога).
 Пересобрать после изменения фраз в `valera/data.js`:
 
 ```
 sudo apt install espeak-ng sox lame && pip install onnxruntime numpy
-# модели vits-piper-ru_RU-{dmitri,denis,ruslan,irina}-medium: github.com/k2-fsa/sherpa-onnx/releases/tag/tts-models
+# модели vits-piper-ru_RU-{dmitri,denis,ruslan,irina}-medium, vits-piper-uk_UA-ukrainian_tts-medium, vits-mms-rus:
+#   github.com/k2-fsa/sherpa-onnx/releases/tag/tts-models  (+ pip install sherpa-onnx)
 node tools/export_lines.js > /tmp/lines.json
 python3 tools/build_voices_neural.py /tmp/lines.json /путь/к/моделям
 ```
