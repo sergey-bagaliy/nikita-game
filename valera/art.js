@@ -105,8 +105,19 @@ function drawRiderArms(ctx, s, jersey, stripe) {
 function drawPlayer(ctx, x, y, s, bike, t, st) {
   ctx.save();
   ctx.translate(x, y);
-  ctx.rotate(st.angle + st.lean * 0.18);
-  shadow(ctx, 4 * s, 8 * s, 15 * s, 42 * s, 0.16);
+  const lean = st.lean || 0, wh = st.wheelie || 0;
+  // наклон: мотоцикл поворачивает и «ложится» на бок (сверху выглядит уже), тень уходит в другую сторону
+  ctx.rotate(st.angle + lean * 0.3);
+  shadow(ctx, (4 - lean * 12) * s, (8 + wh * 16) * s, (15 + Math.abs(lean) * 4) * s, (42 - wh * 6) * s, 0.16 - wh * 0.05);
+  if (wh > 0) {
+    // цапа: переднее колесо в воздухе — передняя часть ближе к камере, байк чуть больше и приподнят
+    ctx.translate(0, -16 * s * wh);
+    ctx.scale(1 + 0.16 * wh, 1 + 0.32 * wh);
+    ctx.fillStyle = `rgba(160,140,110,${0.5 * wh})`;
+    for (let i = 0; i < 4; i++) { ctx.beginPath(); ctx.arc((Math.sin(t * 40 + i) * 8) * s, (52 + i * 6) * s, (4 + i * 2) * s, 0, Math.PI * 2); ctx.fill(); }
+  }
+  ctx.scale(1 - Math.abs(lean) * 0.28, 1);
+  ctx.translate(lean * 3 * s, 0);
   const wob = Math.sin(t * 30) * 0.6 * s;
 
   if (bike.special === 'roller') {
@@ -127,9 +138,11 @@ function drawPlayer(ctx, x, y, s, bike, t, st) {
     ctx.fillStyle = '#2a2a2e'; ctx.beginPath(); ctx.ellipse(28 * s, 8 * s, 9 * s, 12 * s, 0, 0, Math.PI * 2); ctx.fill();
   }
   drawBikeTop(ctx, s, bike.color);
+  if (wh > 0) { ctx.fillStyle = 'rgba(255,255,255,.5)'; ctx.beginPath(); ctx.ellipse(0, -44 * s, 9 * s, 4 * s, 0, 0, Math.PI * 2); ctx.fill(); }
   drawRiderArms(ctx, s, '#1b1b1f', '#e0262b');
   ctx.fillStyle = '#2a2a2e'; rr(ctx, -10 * s, 4 * s, 20 * s, 16 * s, 5 * s); ctx.fill();
-  drawFace(ctx, 0, -12 * s + wob, 19 * s, 23 * s, st.headTilt, st.hurt > 0);
+  // голова смещается в сторону наклона, на цапе — назад
+  drawFace(ctx, lean * 9 * s, -12 * s + wob + wh * 10 * s, 19 * s, 23 * s, st.headTilt + lean * 0.25, st.hurt > 0);
   ctx.restore();
 }
 
