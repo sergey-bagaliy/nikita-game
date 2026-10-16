@@ -3,27 +3,39 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#5b6cf0">
-  <meta name="description" content="Весёлый тренажёр таблицы умножения для Никиты">
-  <title>Умножайка Никиты</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⭐</text></svg>">
+  <meta name="theme-color" content="#7cc6ff">
+  <meta name="description" content="Лётная школа Никиты — весёлый тренажёр таблицы умножения">
+  <title>Лётная школа Никиты</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✈️</text></svg>">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <!-- Небо с облаками -->
+  <div class="sky" aria-hidden="true">
+    <div class="cloud" style="--top:6%;  --s:1;    --dur:70s;  --delay:-10s"></div>
+    <div class="cloud" style="--top:22%; --s:.7;   --dur:95s;  --delay:-60s"></div>
+    <div class="cloud" style="--top:45%; --s:1.2;  --dur:110s; --delay:-30s"></div>
+    <div class="cloud" style="--top:65%; --s:.8;   --dur:85s;  --delay:-75s"></div>
+    <div class="cloud" style="--top:84%; --s:1.05; --dur:100s; --delay:-5s"></div>
+  </div>
+
   <main class="app">
 
     <!-- ===== Меню ===== -->
     <section id="menu" class="screen active">
       <header class="top">
-        <h1>Умножайка <span>для Никиты</span></h1>
+        <div class="title">
+          <h1>Лётная школа <span>Никиты</span></h1>
+          <div class="header-plane anim" id="headerPlane"></div>
+        </div>
         <button id="soundBtn" class="icon-btn" type="button" aria-label="Звук">🔊</button>
       </header>
 
       <div class="card level-card">
         <div class="level-row">
-          <div class="level-badge" id="levelIcon">🐣</div>
+          <div class="level-badge" id="levelIcon">🧳</div>
           <div>
-            <div class="level-name"><span id="levelNum">1</span>-й уровень: <span id="levelName">Новичок</span></div>
+            <div class="level-name">Звание: <span id="levelName">Пассажир</span></div>
             <div class="level-sub" id="levelSub"></div>
           </div>
         </div>
@@ -47,26 +59,45 @@
 
       <div class="modes">
         <button class="mode-btn train" data-mode="train" type="button">
-          <span class="mode-icon">🎯</span>
+          <span class="mode-icon">🗺️</span>
           <span class="mode-title">Тренировка</span>
-          <span class="mode-desc">10 примеров, без спешки</span>
+          <span class="mode-desc">Полёт в другой город: 10 примеров</span>
         </button>
         <button class="mode-btn speed" data-mode="speed" type="button">
-          <span class="mode-icon">⚡</span>
+          <span class="mode-icon">⛽</span>
           <span class="mode-title">На скорость</span>
-          <span class="mode-desc">60 секунд — сколько успеешь?</span>
+          <span class="mode-desc">Топлива на 60 секунд — сколько успеешь?</span>
         </button>
+      </div>
+
+      <div class="card hangar-card">
+        <h2>Мой ангар ✈️</h2>
+        <div class="hangar" id="hangar"></div>
+        <p class="hint" id="hangarHint"></p>
       </div>
     </section>
 
-    <!-- ===== Игра ===== -->
+    <!-- ===== Полёт ===== -->
     <section id="game" class="screen">
       <div class="hud">
         <button id="quitBtn" class="icon-btn" type="button" aria-label="Выйти в меню">✕</button>
-        <div class="hud-info" id="hudInfo">1 из 10</div>
+        <div class="hud-info" id="hudInfo">Пример 1 из 10</div>
         <div class="hud-score">⭐ <span id="hudScore">0</span></div>
       </div>
-      <div class="progress game-progress"><div id="gameBar"></div></div>
+
+      <div class="flight" id="flight">
+        <div class="route-labels"><span id="fromCity">Краснодар</span><span id="toCity">Москва</span></div>
+        <div class="route">
+          <div class="route-line"></div>
+          <div class="route-done" id="routeDone"></div>
+          <div class="flight-plane" id="flightPlane"><div class="anim bob" id="flightPlaneInner"></div></div>
+        </div>
+        <div class="fuel hidden" id="fuel">
+          <span class="fuel-icon">⛽</span>
+          <div class="fuel-bar"><div id="fuelBar"></div></div>
+          <b id="fuelSec">60</b>
+        </div>
+      </div>
 
       <div class="streak" id="streak">&nbsp;</div>
       <div class="question" id="question">2 × 2 = ?</div>
@@ -84,26 +115,33 @@
         <div class="explain-sum" id="explainSum"></div>
         <div class="explain-steps" id="explainSteps"></div>
         <div class="dots" id="dots"></div>
-        <button id="nextBtn" class="big-btn" type="button">Понятно, дальше ➜</button>
+        <button id="nextBtn" class="big-btn" type="button">Понятно, летим дальше ➜</button>
       </div>
     </section>
 
-    <!-- ===== Итоги ===== -->
+    <!-- ===== Посадка (итоги) ===== -->
     <section id="result" class="screen">
       <div class="card result-card">
+        <div class="res-place" id="resPlace"></div>
         <div class="result-stars" id="resStars"></div>
         <h2 id="resTitle"></h2>
         <p class="res-text" id="resText"></p>
         <div class="res-stats" id="resStats"></div>
-        <div class="banner record hidden" id="resRecord">🎉 Новый рекорд!</div>
+        <div class="banner record hidden" id="resRecord"></div>
         <div class="banner levelup hidden" id="resLevel"></div>
+        <div class="banner newplane hidden" id="resPlane">
+          <div class="newplane-pic anim" id="resPlanePic"></div>
+          <div id="resPlaneText"></div>
+          <button id="resPlaneBtn" class="small-btn" type="button">✈️ Лететь на нём</button>
+        </div>
         <div class="mistakes hidden" id="resMistakes"></div>
       </div>
-      <button id="againBtn" class="big-btn" type="button">Ещё раз 🔁</button>
+      <button id="againBtn" class="big-btn" type="button">Ещё полёт 🔁</button>
       <button id="menuBtn" class="big-btn secondary" type="button">В меню</button>
     </section>
 
   </main>
+  <script src="planes.js"></script>
   <script src="game.js"></script>
 </body>
 </html>
