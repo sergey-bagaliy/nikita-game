@@ -133,6 +133,14 @@ h1 span { color: var(--yellow); }
   text-align: center; font-weight: 900; font-size: 1.05rem;
   box-shadow: 0 4px 0 #b58f00;
 }
+.zone-banner {
+  margin: 10px auto 0; max-width: 360px;
+  background: #1565c0; color: #fff;
+  border: 3px solid #fff; border-radius: 12px; padding: 10px 12px;
+  text-align: center; font-weight: 900; font-size: 1.1rem;
+  box-shadow: 0 6px 16px rgba(0,0,0,.35);
+  animation: pop .3s ease;
+}
 .bubble {
   margin: 10px auto 0; max-width: 340px;
   background: #fff; color: #1a1a1a;

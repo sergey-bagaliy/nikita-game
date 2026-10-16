@@ -637,6 +637,17 @@ function drawSign(ctx, x, y, s, kind, val) {
   ctx.restore();
 }
 
+// Въездная арка с названием населённого пункта
+function drawArch(ctx, x1, x2, y, s, text, town) {
+  ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(x1 + 6 * s, y + 4 * s, x2 - x1, 26 * s);
+  ctx.fillStyle = town ? '#7f8c8d' : '#8d6e63';
+  ctx.fillRect(x1 - 6 * s, y - 16 * s, 12 * s, 36 * s); ctx.fillRect(x2 - 6 * s, y - 16 * s, 12 * s, 36 * s);
+  ctx.fillStyle = town ? '#1565c0' : '#2e7d32'; rr(ctx, x1, y - 14 * s, x2 - x1, 28 * s, 5 * s); ctx.fill();
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = 2 * s; rr(ctx, x1 + 3 * s, y - 11 * s, x2 - x1 - 6 * s, 22 * s, 4 * s); ctx.stroke();
+  ctx.fillStyle = '#fff'; ctx.font = `900 ${12 * s}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(text, (x1 + x2) / 2, y, x2 - x1 - 16 * s);
+}
+
 function drawBanner(ctx, x1, x2, y, s, text) {
   ctx.fillStyle = '#555'; ctx.fillRect(x1 - 3 * s, y - 4 * s, 6 * s, 30 * s); ctx.fillRect(x2 - 3 * s, y - 4 * s, 6 * s, 30 * s);
   ctx.fillStyle = '#c92a2a'; rr(ctx, x1, y - 12 * s, x2 - x1, 22 * s, 3 * s); ctx.fill();
