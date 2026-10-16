@@ -32,7 +32,8 @@ const Voice = {
   beep: null,
   actx: null,
   src: null,
-  files: {},      // скачанные mp3 (сжатые), чтобы не качать повторно
+  files: {},      // скачанные mp3 (сжатые) — только если нет офлайн-кэша
+  decoded: new Map(), // последние разобранные фразы: повтор играет сразу, без повторной распаковки mp3
 
   init() {
     if (!this.ttsOk) return;
@@ -44,7 +45,8 @@ const Voice = {
   ctx() {
     try {
       this.actx = this.actx || new (window.AudioContext || window.webkitAudioContext)();
-      if (this.actx.state === 'suspended') this.actx.resume();
+      // iPhone после звонка или сворачивания ставит 'interrupted' — будим из любого состояния
+      if (this.actx.state !== 'running') this.actx.resume().catch(() => { /* разбудим при следующем касании */ });
       return this.actx;
     } catch (e) { return null; }
   },
@@ -60,7 +62,8 @@ const Voice = {
 
   // Заранее скачиваем фразы текущего режима (обычный / с матом), по две за раз
   prefetch(mat) {
-    if (typeof VOICE_FILES === 'undefined' || this.prefetching) return;
+    if (!this.enabled || typeof VOICE_FILES === 'undefined' || this.prefetching) return;
+    if (navigator.connection && navigator.connection.saveData) return; // «экономия трафика» — качаем по мере надобности
     this.prefetching = true;
     const want = Object.entries(VOICE_FILES).filter(([k]) => mat || !k.includes('*')).map(([, f]) => f);
     const queue = [...new Set(want)].filter(f => !this.files[f]);
@@ -74,8 +77,22 @@ const Voice = {
 
   fetchFile(f) {
     if (this.files[f]) return Promise.resolve(this.files[f]);
+    // при офлайн-кэше файл и так лежит в телефоне — в памяти страницы его не держим
+    const keep = !(navigator.serviceWorker && navigator.serviceWorker.controller);
     return fetch(f).then(r => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
-      .then(b => { this.files[f] = b; return b; });
+      .then(b => { if (keep) this.files[f] = b; return b; });
+  },
+
+  decode(a, file) {
+    const hit = this.decoded.get(file);
+    if (hit) { this.decoded.delete(file); this.decoded.set(file, hit); return Promise.resolve(hit); }
+    return this.fetchFile(file)
+      .then(buf => new Promise((res, rej) => a.decodeAudioData(buf.slice(0), res, rej)))
+      .then(ab => {
+        this.decoded.set(file, ab);
+        if (this.decoded.size > 24) this.decoded.delete(this.decoded.keys().next().value);
+        return ab;
+      });
   },
 
   stop() {
@@ -92,19 +109,18 @@ const Voice = {
     const now = performance.now();
     if (now < this.busyUntil && prio <= this.priority) return;
     const file = typeof VOICE_FILES !== 'undefined' ? VOICE_FILES[roleId + '|' + text] : null;
-    if (file) { this.playFile(file, prio); return; }
+    if (file) { this.playFile(file, prio, text, roleId); return; }
     this.speakTts(text, String(roleId).replace(/^phone:/, ''), prio);
   },
 
-  playFile(file, prio) {
+  playFile(file, prio, text, roleId) {
     const a = this.ctx();
-    if (!a) return;
+    if (!a) { this.speakTts(text, String(roleId).replace(/^phone:/, ''), prio); return; }
     this.stop();
     const my = this.token;
     this.priority = prio;
     this.busyUntil = performance.now() + 3000;
-    this.fetchFile(file)
-      .then(buf => new Promise((res, rej) => a.decodeAudioData(buf.slice(0), res, rej)))
+    this.decode(a, file)
       .then(audioBuf => {
         if (my !== this.token) return;
         const s = a.createBufferSource();
@@ -117,7 +133,10 @@ const Voice = {
         this.src = s;
         this.busyUntil = performance.now() + audioBuf.duration * 1000;
       })
-      .catch(() => { if (my === this.token) { this.priority = 0; this.busyUntil = 0; } });
+      .catch(() => {
+        // файл не загрузился (нет сети и нет в памяти) — скажем встроенным голосом браузера
+        if (my === this.token) { this.priority = 0; this.busyUntil = 0; this.speakTts(text, String(roleId).replace(/^phone:/, ''), prio); }
+      });
   },
 
   // Запасной вариант — синтез речи браузера

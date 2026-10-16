@@ -3,12 +3,26 @@
 /* ================= Настройки ================= */
 const KM = 10000;                 // столько «единиц пути» в одном километре
 const STORE = 'valera-roads-v1';
+const WHEELIE_TIME = 1.5;        // сколько секунд длится цапа
+const WHEELIE_COOLDOWN = 3;      // передышка после цапы
+const WHEELIE_SKIP = new Set(['pothole', 'puddle', 'glass']); // что проскакиваем на заднем колесе
 const DEF = { career: 0, bank: 0, best: 0, bestKm: 0, bike: 'moped', owned: ['moped'], ach: [], geese: 0, shifts: 0, sound: true, voice: true, mat: false, subs: true, tutorial: false };
 
 /* ================= Сохранение ================= */
 function load() {
-  try { return Object.assign({}, DEF, JSON.parse(localStorage.getItem(STORE)) || {}); }
-  catch (e) { return Object.assign({}, DEF); }
+  let raw = {};
+  try { raw = JSON.parse(localStorage.getItem(STORE)) || {}; } catch (e) { /* испорченное сохранение — начнём заново */ }
+  // каждое поле проверяем по типу: битое значение не должно ломать меню навсегда
+  const out = {};
+  for (const [k, def] of Object.entries(DEF)) {
+    const v = raw[k];
+    if (Array.isArray(def)) out[k] = Array.isArray(v) ? v.filter(x => typeof x === 'string') : def.slice();
+    else if (typeof def === 'number') out[k] = Number.isFinite(v) ? Math.max(0, v) : def;
+    else out[k] = typeof v === typeof def ? v : def;
+  }
+  if (!out.owned.includes('moped')) out.owned.unshift('moped');
+  if (!out.owned.includes(out.bike)) out.bike = 'moped';
+  return out;
 }
 function persist() {
   try { localStorage.setItem(STORE, JSON.stringify(save)); } catch (e) { /* без сохранения тоже играем */ }
@@ -54,7 +68,8 @@ function ac() {
   if (!save.sound) return null;
   try {
     audio = audio || new (window.AudioContext || window.webkitAudioContext)();
-    if (audio.state === 'suspended') audio.resume();
+    // iPhone после звонка или сворачивания ставит 'interrupted' — будим из любого состояния
+    if (audio.state !== 'running') audio.resume().catch(() => { /* разбудим при следующем касании */ });
     return audio;
   } catch (e) { return null; }
 }
@@ -111,6 +126,7 @@ const sfx = {
   over()   { [466, 440, 415].forEach((f, i) => tone(f, i * 0.45, 0.42, { type: 'sawtooth', vol: 0.08 })); tone(392, 1.35, 1.1, { type: 'sawtooth', to: 370, vol: 0.08 }); },
   stamp()  { noise(0, 0.2, { freq: 300, vol: 0.7 }); },
   beep()   { tone(1000, 0, 0.3, { type: 'sine', vol: 0.12 }); },
+  wheelie() { tone(90, 0, 0.6, { type: 'sawtooth', to: 260, vol: 0.12 }); },
 };
 Voice.beep = () => { if (save.sound) sfx.beep(); };
 Voice.enabled = save.voice;
@@ -126,11 +142,17 @@ function engineStart() {
   osc.start();
   engine = { osc, gn };
 }
-function engineSet(speed) { if (engine && audio) engine.osc.frequency.setTargetAtTime(40 + speed * 0.09, audio.currentTime, 0.2); }
+function engineSet(speed) {
+  if (!engine || !audio) return;
+  const f = 40 + speed * 0.09;
+  if (Math.abs(f - (engine.f || 0)) < 0.5) return; // не засыпаем звуковую карту командами каждый кадр
+  engine.f = f;
+  engine.osc.frequency.setTargetAtTime(f, audio.currentTime, 0.2);
+}
 function engineStop() { if (engine) { try { engine.osc.stop(); } catch (e) { /* уже остановлен */ } engine = null; } }
 
 /* ================= Холст и геометрия дороги ================= */
-const cv = $('cv'), ctx = cv.getContext('2d');
+const cv = $('cv'), ctx = cv.getContext('2d', { alpha: false }); // непрозрачный холст рисуется быстрее
 let W = 0, H = 0, PY = 0, roadW = 0, laneW = 0, S = 1, AMP = 0;
 const roadPatterns = {};
 
@@ -146,9 +168,37 @@ function makeRoadPattern(color) {
   return ctx.createPattern(c, 'repeat');
 }
 
+// Качество картинки: если кадры идут медленно, сами снижаем чёткость и детализацию дороги.
+// Смотрим окнами по 2 секунды. Если после снижения быстрее не стало (например, телефон в режиме
+// энергосбережения и сам держит 30 кадров) — возвращаем как было и больше не трогаем.
+const QUALITY = [{ slice: 8, dpr: 2 }, { slice: 12, dpr: 1.5 }, { slice: 16, dpr: 1 }, { slice: 16, dpr: 0.75 }];
+const quality = { level: 0, prev: 0, slice: 8, acc: 0, n: 0, base: 0, check: false, locked: false };
+const levelDpr = i => Math.min(QUALITY[i].dpr, window.devicePixelRatio || 1);
+function watchFps(ms) {
+  if (ms > 250 || g.t < 3 || quality.locked) return; // вкладка была скрыта или смена только началась
+  quality.acc += ms; quality.n++;
+  if (quality.acc < 2000) return;
+  const avg = quality.acc / quality.n;
+  quality.acc = 0; quality.n = 0;
+  if (quality.check) {
+    quality.check = false;
+    if (avg > quality.base * 0.93) { quality.level = quality.prev; quality.locked = true; resize(); }
+    return;
+  }
+  if (avg <= 24) return;
+  // следующая ступень, на которой картинка действительно легче (на обычном мониторе 2 и 1,5 — одно и то же)
+  let next = quality.level + 1;
+  while (next < QUALITY.length && levelDpr(next) >= levelDpr(quality.level)) next++;
+  if (next >= QUALITY.length) { quality.locked = true; return; }
+  quality.prev = quality.level; quality.base = avg; quality.level = next; quality.check = true; resize();
+}
+
 function resize() {
+  const oldS = S;
   W = cv.clientWidth; H = cv.clientHeight;
-  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const q = QUALITY[quality.level];
+  quality.slice = q.slice;
+  const dpr = Math.min(q.dpr, window.devicePixelRatio || 1);
   cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   const narrow = W < 600;
@@ -158,6 +208,13 @@ function resize() {
   PY = H * 0.8;
   AMP = clamp((W - roadW) / 2 - 14 * S, 0, 240) * (narrow ? 0.45 : 1);
   for (const k of Object.keys(ZONES)) roadPatterns[k] = makeRoadPattern(ZONES[k].road);
+  roadBatch.forEach(m => m.clear());
+  // повернули телефон посреди смены — ямы и дома пересчитываем под новый масштаб
+  if (g && oldS && S !== oldS) {
+    const k = S / oldS;
+    for (const list of [g.objs, g.scenery]) for (const o of list) { if (typeof o.w === 'number') o.w *= k; if (typeof o.h === 'number') o.h *= k; }
+  }
+  if (g && raf === 0) requestAnimationFrame(() => { if (g) draw(); }); // холст очистился — перерисовать даже на паузе
 }
 window.addEventListener('resize', () => { if ($('game').classList.contains('active')) resize(); });
 
@@ -193,7 +250,7 @@ function newGame() {
     bike, t: 0, dist: 0, bonus: 0, coins: 0, fines: 0,
     repairs: 0, holesHit: 0, dodged: 0, cones: 0, animals: 0, grannies: 0, shawarma: 0, motya: 0,
     helmets: bike.helmets, asphalt: 1,
-    stage: 0, lane: 1, lx: 1.5, lean: 0, wheelie: 0, wheelieCd: 0,
+    stage: 0, lane: 1, lx: 1.5, lean: 0, wheelie: 0, wheelieCd: 0, timers: [],
     hurt: 0, inv: 0, energy: 0, goose: 0, headTilt: 0, shake: 0, splash: 0, splashBlobs: [], flash: 0,
     zones: [], curZone: null, villageN: 0,
     objs: [], scenery: [], cracks: [], parts: [], floats: [],
@@ -334,18 +391,24 @@ function startGame() {
   updateHud(true);
   if (!save.tutorial) showHowTo(true);
   else engineStart();
-  lastT = performance.now();
-  cancelAnimationFrame(raf);
-  raf = requestAnimationFrame(loop);
+  cancelAnimationFrame(raf); raf = 0;
+  kick();
 }
 
+// Цикл кадров крутится только во время смены; на паузе и в меню стоит — батарея не тратится
 function loop(now) {
-  const dt = Math.min(0.05, (now - lastT) / 1000);
+  raf = 0;
+  if (!g) return;
+  const ms = now - lastT;
+  const dt = Math.min(0.05, ms / 1000);
   lastT = now;
-  if (g) {
-    if (!g.paused) update(dt);
-    draw();
-  }
+  if (!g.paused) { update(dt); if (g) watchFps(ms); }
+  if (g) draw();
+  if (g && !g.paused) raf = requestAnimationFrame(loop);
+}
+function kick() {
+  if (raf) return;
+  lastT = performance.now();
   raf = requestAnimationFrame(loop);
 }
 
@@ -360,8 +423,23 @@ function currentSpeed() {
 const kmh = v => Math.round(v * 0.2);
 
 /* ---------- Кадр ---------- */
+// Отложенные действия по игровому времени: на паузе не срабатывают и не «перетекают» в новую смену
+function later(sec, fn) { g.timers.push({ at: g.t + sec, fn }); }
+function runTimers() {
+  const gg = g;
+  for (let i = 0; i < gg.timers.length; i++) {
+    const tm = gg.timers[i];
+    if (tm.at > gg.t) continue;
+    gg.timers.splice(i--, 1);
+    tm.fn();
+    if (g !== gg) return; // смена закончилась
+  }
+}
+
 function update(dt) {
   g.t += dt;
+  runTimers();
+  if (!g) return;
   const v = currentSpeed();
   const prevDist = g.dist;
   g.dist += v * dt;
@@ -372,7 +450,7 @@ function update(dt) {
 
   // смена этапа — звонок
   const next = STAGES[g.stage + 1];
-  if (next && km >= next.km && !g.over) { g.stage++; bossCall(g.stage); }
+  if (next && km >= next.km && !g.over) { g.stage++; bossCall(g.stage); updateHud(); return; }
 
   // въезд в населённый пункт
   const cz = zoneAt(g.dist);
@@ -381,7 +459,7 @@ function update(dt) {
     g.curZone = cz;
     if (!first) {
       announce(cz.type === 'highway' ? '🛣️ Выезд на трассу' : (cz.type === 'town' ? '🏙️ Въезд в город: ' : '🏡 Въезд в станицу: ') + (cz.type === 'highway' ? '' : cz.name));
-      if (Math.random() < 0.6) setTimeout(() => { if (g) talk(txt(pick(ZONE_LINES[cz.type])), 'valera', 1); }, 1200);
+      if (Math.random() < 0.6) later(1.2, () => talk(txt(pick(ZONE_LINES[cz.type])), 'valera', 1));
     }
   }
 
@@ -447,12 +525,12 @@ function update(dt) {
       if (s.camera && kmh(v) > s.limit + 10) {
         g.fines += 100; g.flash = 0.35; sfx.flash();
         float(laneX(g.lx, g.dist), PY - 70 * S, '📷 −100 ₽', '#ff8b8b');
-        talk(say('cameraBot'), 'camerabot', 3, true);
-        setTimeout(() => { if (g && !g.over) talk(say('camera'), 'accountant', 3, true); }, 4200);
+        sayTo('cameraBot', 'camerabot', 3, true);
+        later(4.2, () => { if (!g.over) sayTo('camera', 'accountant', 3, true); });
       }
       if (s.kind === 'bump' && g.wheelie <= 0) {
         g.shake = 0.3; sfx.thump();
-        if (Math.random() < 0.5) talk(say('bump'), 'valera', 1);
+        if (Math.random() < 0.5) sayTo('bump', 'valera', 1);
       }
     }
   }
@@ -482,7 +560,7 @@ function update(dt) {
     g.nextSupport -= dt;
     if (g.nextSupport <= 0) { g.nextSupport = rand(35, 55); support('support', 1); }
     g.nextNav -= dt;
-    if (g.nextNav <= 0) { g.nextNav = rand(40, 65); talk(say('navigator'), 'navigator', 2); }
+    if (g.nextNav <= 0) { g.nextNav = rand(40, 65); sayTo('navigator', 'navigator', 2); }
   }
 
   // события
@@ -610,7 +688,7 @@ function startMotya(d) {
   const kind = pick(kinds);
   const side = Math.random() < 0.5 ? -1 : 1;
   g.motya++;
-  if (g.motya > 0) setTimeout(() => { if (g && !g.over) talk(say('valeraMotya'), 'valera', 1); }, 2600);
+  if (g.motya > 0) later(2.6, () => { if (!g.over) sayTo('valeraMotya', 'valera', 1); });
   const fromLeft = side < 0;
   switch (kind) {
     case 'club':
@@ -687,42 +765,48 @@ function hitBox(o) {
 /* ---------- Столкновения ---------- */
 function collide(o) {
   const x = laneX(o.lx, o.d), y = yOf(o.d);
+  // на заднем колесе наземные препятствия проскакиваем (без штрафа в акте)
+  if (g.wheelie > 0 && WHEELIE_SKIP.has(o.type)) {
+    o.hitDone = true;
+    if (o.type !== 'glass') g.bonus += 20;
+    float(x, y, o.type === 'glass' ? 'Проскочил!' : 'Проскочил! +20', '#7CFC00');
+    return;
+  }
   switch (o.type) {
     case 'bucket':
       o.hitDone = true; o.dead = true;
       if (g.asphalt < g.bike.asphalt) {
         g.asphalt++; float(x, y, '+🪣');
-        if (Math.random() < 0.45) talk(say('bucket'), 'valera', 1);
+        if (Math.random() < 0.45) sayTo('bucket', 'valera', 1);
       } else {
         g.bonus += 20; float(x, PY - 60 * S, 'Склад полон +20');
-        if (Math.random() < 0.6) talk(say('bucketFull'), 'valera', 1);
+        if (Math.random() < 0.6) sayTo('bucketFull', 'valera', 1);
       }
       sfx.bucket();
       break;
     case 'coin':
       o.hitDone = true; o.dead = true;
       g.coins++; sfx.coin();
-      if (Math.random() < 0.1) talk(say('coin'), 'valera', 1);
+      if (Math.random() < 0.1) sayTo('coin', 'valera', 1);
       float(x, PY - 50 * S, '+10 ₽', '#ffcc00');
       break;
     case 'shawarma':
       o.hitDone = true; o.dead = true;
       g.helmets = Math.min(g.bike.helmets, g.helmets + 1); g.shawarma++;
-      sfx.heal(); talk(say('shawarma'), 'valera', 2, true);
+      sfx.heal(); sayTo('shawarma', 'valera', 2, true);
       break;
     case 'energy':
       o.hitDone = true; o.dead = true;
-      g.energy = 5; sfx.energy(); talk(say('energy'), 'valera', 2, true);
+      g.energy = 5; sfx.energy(); sayTo('energy', 'valera', 2, true);
       if (Math.random() < 0.5) support('support', 2, 1600);
       break;
     case 'pothole':
     case 'puddle':
       if (g.bike.special === 'roller') { fix(o, true); break; }
       o.hitDone = true;
-      if (g.wheelie > 0) { g.bonus += 20; float(x, y, 'Проскочил! +20', '#7CFC00'); g.dodged++; break; }
       if (o.type === 'puddle') {
         g.splash = 1.8; g.splashBlobs = makeSplash();
-        if (!o.hidden) { talk(say('splash'), 'valera', 1); noise(0, 0.3, { freq: 1200, filter: 'bandpass', vol: 0.4 }); break; }
+        if (!o.hidden) { sayTo('splash', 'valera', 1); noise(0, 0.3, { freq: 1200, filter: 'bandpass', vol: 0.4 }); break; }
       }
       if (damage('pothole')) g.holesHit++;
       break;
@@ -731,26 +815,26 @@ function collide(o) {
       o.fly = { vx: rand(-4, 4), vd: rand(500, 800) };
       g.cones++; g.bonus = Math.max(-1000, g.bonus - 10);
       sfx.cone();
-      if (Math.random() < 0.6) talk(say('cone'), 'valera', 1);
+      if (Math.random() < 0.6) sayTo('cone', 'valera', 1);
       float(x, y, '−10');
       break;
     case 'goose':
       o.hitDone = true; o.fly = { vx: o.vx * 3, vd: 900 };
       if (g.energy > 0) { float(x, y, 'Гусь улетел'); break; }
       g.goose = 4; g.animals++;
-      sfx.honk(); talk(say('goose'), 'valera', 2, true);
+      sfx.honk(); sayTo('goose', 'valera', 2, true);
       g.shake = 0.3;
       break;
     case 'cat':
       o.hitDone = true; o.fly = { vx: o.vx * 2, vd: 600 };
       g.animals++; sfx.meow();
       if (g.asphalt > 0) { g.asphalt--; float(x, y, '−🪣', '#ff8b8b'); }
-      talk(say('cat'), 'valera', 2, true);
+      sayTo('cat', 'valera', 2, true);
       break;
     case 'rat':
       o.hitDone = true; o.fly = { vx: o.vx * 2, vd: 700 };
       g.animals++; sfx.squeak(); g.bonus -= 20; float(x, y, '−20');
-      talk(say('rat'), 'valera', 1);
+      sayTo('rat', 'valera', 1);
       break;
     case 'cow':
       o.hitDone = true; sfx.moo();
@@ -762,15 +846,14 @@ function collide(o) {
       break;
     case 'granny':
       o.hitDone = true; o.vx *= 0.3;
-      if (damage(null)) { g.grannies++; talk(say('granny'), 'granny', 3, true); }
+      if (damage(null)) { g.grannies++; sayTo('granny', 'granny', 3, true); }
       break;
     case 'passer':
       o.hitDone = true; o.vx *= 0.3;
-      if (damage(null)) talk(say('passer'), 'passer', 3, true);
+      if (damage(null)) sayTo('passer', 'passer', 3, true);
       break;
     case 'glass':
       o.hitDone = true;
-      if (g.wheelie > 0) { float(x, y, 'Проскочил!', '#7CFC00'); break; }
       damage('glass');
       break;
     case 'roller':
@@ -781,7 +864,7 @@ function collide(o) {
     case 'motyaRun':
     case 'motyaLying':
       o.hitDone = true;
-      if (damage(null)) talk(say('motyaHit'), 'motya', 3, true);
+      if (damage(null)) sayTo('motyaHit', 'motya', 3, true);
       break;
     case 'motyaDog':
       o.hitDone = true; sfx.bark();
@@ -791,7 +874,7 @@ function collide(o) {
 }
 
 function support(cat, prio, delay = 0) {
-  setTimeout(() => { if (g && !g.over && !g.paused) talk(say(cat), 'friend', prio, true); }, delay);
+  later(delay / 1000, () => { if (!g.over) talk(say(cat), 'friend', prio, true); });
 }
 
 function damage(kind) {
@@ -807,7 +890,7 @@ function damage(kind) {
     g.over = true; g.overT = 0;
     engineStop();
     sfx.over();
-    setTimeout(finishGame, 1600);
+    later(1.6, finishGame);
   }
   return true;
 }
@@ -825,13 +908,14 @@ function fix(o, auto) {
   if (!auto) g.repairStreak++;
   if (!auto && g.repairStreak % 4 === 0) support('support', 2, 500);
   else if (o.type === 'puddle') talk(txt(PHRASES.repair[3]), 'valera', 1);
-  else if (!auto && Math.random() < 0.3) talk(say('repair'), 'valera', 1);
+  else if (!auto && Math.random() < 0.3) sayTo('repair', 'valera', 1);
 }
 
 function tryRepair(o) {
+  if (!g || g.over || g.paused) return;
   if (g.asphalt <= 0) {
     sfx.dud();
-    if (g.t - g.lastSay > 1.5) talk(say('noAsphalt'), 'valera', 1, true);
+    if (g.t - g.lastSay > 1.5) sayTo('noAsphalt', 'valera', 1, true);
     return;
   }
   g.asphalt--;
@@ -851,21 +935,37 @@ function repairTargetAt(x, y) {
   return best;
 }
 
+// Яма/лужа в полосе, где едет Валера (большая яма занимает две полосы)
+function inMyLane(o) {
+  const half = o.big ? 0.85 : 0.5;
+  return Math.abs(o.lx - (g.lane + 0.5)) < half + 0.1;
+}
+
+// Ближайшая яма или лужа впереди в своей полосе
 function nearestAhead() {
   let best = null;
   for (const o of g.objs) {
-    if ((o.type !== 'pothole' && o.type !== 'puddle') || o.fixed || o.hitDone) continue;
+    if ((o.type !== 'pothole' && o.type !== 'puddle') || o.fixed || o.hitDone || !inMyLane(o)) continue;
     if (o.d > g.dist + 10 && yOf(o.d) > 0 && (!best || o.d < best.d)) best = o;
   }
   return best;
 }
 
+// Кнопка «РЕМОНТ» и пробел
+function repairAhead() {
+  if (!g || g.paused || g.over) return;
+  const o = nearestAhead();
+  if (o) { tryRepair(o); return; }
+  sfx.dud();
+  float(laneX(g.lx, g.dist), PY - 80 * S, 'В полосе ям нет', '#cfd8dc');
+}
+
 function wheelie() {
-  if (!g || g.paused || g.over || g.wheelie > 0 || g.wheelieCd > 0) return;
-  g.wheelie = 1.5; g.wheelieCd = 4.5;
-  tone(90, 0, 0.6, { type: 'sawtooth', to: 260, vol: 0.12 });
+  if (!g || g.paused || g.over || g.wheelie > 0 || g.wheelieCd > 0 || g.bike.special === 'roller') return;
+  g.wheelie = WHEELIE_TIME; g.wheelieCd = WHEELIE_TIME + WHEELIE_COOLDOWN;
+  sfx.wheelie();
   float(laneX(g.lx, g.dist), PY - 80 * S, 'ЦАПА!', '#ffcc00');
-  if (Math.random() < 0.6) talk(say('wheelie'), 'valera', 2, true);
+  if (Math.random() < 0.6) sayTo('wheelie', 'valera', 2, true);
   else support('support', 2, 300);
 }
 
@@ -884,10 +984,15 @@ function burst(x, y, color, n) {
 function makeSplash() {
   return Array.from({ length: 9 }, () => ({ x: rand(0, W), y: rand(0, H), r: rand(40, 110), shape: randomShape(10) }));
 }
+// Можно ли сейчас говорить (болтовня не перебивает только что сказанное)
+const canTalk = (prio, force) => g && (force || prio >= 2 || g.t - g.lastSay >= 1.2);
+// Фраза из набора: берём из «колоды» только если она действительно прозвучит
+function sayTo(key, roleId = 'valera', prio = 1, force = false) {
+  if (canTalk(prio, force)) talk(say(key), roleId, prio, force);
+}
 // Облачко с именем + голос. prio: 1 — болтовня, 2 — важное, 3 — очень важное
 function talk(text, roleId = 'valera', prio = 1, force = false) {
-  if (!g) return;
-  if (!force && prio < 2 && g.t - g.lastSay < 1.2) return;
+  if (!canTalk(prio, force)) return;
   g.lastSay = g.t;
   const role = ROLES[roleId] || ROLES.valera;
   Voice.speak(text, roleId, prio);
@@ -950,14 +1055,16 @@ function pauseGame() {
     if (!save.subs) $('bubble').classList.add('hidden');
   };
   $('quitBtn').onclick = () => { closeDialog(); Voice.stop(); g = null; renderMenu(); showScreen('menu'); };
-  if (Math.random() < 0.5) setTimeout(() => { if (g && g.paused) Voice.speak(say('autoresp'), 'autoresp', 3); }, 400);
+  const gg = g;
+  if (Math.random() < 0.5) setTimeout(() => { if (g === gg && g.paused) Voice.speak(say('autoresp'), 'autoresp', 3); }, 400);
 }
 function resumeGame() {
   closeDialog();
   if (!g) return;
   g.paused = false;
-  lastT = performance.now();
+  Voice.warm();
   engineStart();
+  kick();
 }
 
 function bossCall(stage) {
@@ -974,13 +1081,15 @@ function bossCall(stage) {
     <p><b>Этап ${stage + 1}: ${st.name}</b></p>
     <button class="btn btn-go" id="okBoss" type="button">Понял, работаю 🫡</button>`);
   $('okBoss').onclick = () => { Voice.stop(); resumeGame(); };
-  setTimeout(() => { if (g && g.paused) Voice.speak(text, 'phone:' + roleId, 3); }, 700);
+  const gg = g;
+  setTimeout(() => { if (g === gg && g.paused) Voice.speak(text, 'phone:' + roleId, 3); }, 700);
 }
 
 const HOWTO = `<h3>Как работать</h3>
   <ul>
     <li>⬅️➡️ <b>Ткни пальцем в левую или правую половину экрана</b> — перестроиться. На компьютере — стрелки ← →.</li>
-    <li>🕳️ <b>Ткни пальцем прямо в яму</b> — заделать её. Нужно ведро асфальта 🪣. На компьютере — кликни мышкой по яме или нажми пробел.</li>
+    <li>🕳️ Или <b>ткни пальцем в яму в своей полосе</b>. Нужно ведро асфальта 🪣.</li>
+    <li>🕳️ <b>Кнопка «РЕМОНТ» слева внизу</b> — заделать ближайшую яму в своей полосе. На компьютере — пробел.</li>
     <li>🏍️ <b>Кнопка «ЦАПА» справа внизу</b> — встать на заднее колесо: ямы, лужи и стекло проскакиваешь. На компьютере — ↓ или Shift.</li>
     <li>⛑️ Яма, корова, собака, бабушка, стекло, каток и Мотя — минус шлем. Шлемы кончились — смена окончена.</li>
     <li>🦆 Гусь путает лево и право. 🐈‍⬛ Кошка крадёт ведро. 🌯 Шаурма лечит. ⚡ Энергетик — неуязвимость.</li>
@@ -1005,13 +1114,15 @@ function showHowTo(inGame) {
 /* ---------- HUD ---------- */
 let hudCache = {};
 function setText(id, value) { if (hudCache[id] !== value) { hudCache[id] = value; $(id).textContent = value; } }
-function score() { return Math.max(0, Math.floor(g.dist / 10 + g.bonus)); }
+function setClass(id, cls, on) { const k = id + '.' + cls; if (hudCache[k] !== on) { hudCache[k] = on; $(id).classList.toggle(cls, on); } }
+const fmt = new Intl.NumberFormat('ru-RU');
+function score(st = g) { return Math.max(0, Math.floor(st.dist / 10 + st.bonus)); }
 function updateHud(reset) {
   if (reset) hudCache = {};
   setText('hHelmets', '⛑️ ' + Math.max(0, g.helmets));
   setText('hAsphalt', `🪣 ${g.asphalt}/${g.bike.asphalt}`);
-  $('hAsphalt').classList.toggle('empty', g.asphalt === 0);
-  setText('hScore', score().toLocaleString('ru-RU'));
+  setClass('hAsphalt', 'empty', g.asphalt === 0);
+  setText('hScore', fmt.format(score()));
   setText('hStage', `Этап ${g.stage + 1}: ${STAGES[g.stage].name}`);
   setText('hKm', (g.dist / KM).toFixed(2) + ' км');
   const z = zoneAt(g.dist);
@@ -1019,81 +1130,106 @@ function updateHud(reset) {
   const sp = kmh(currentSpeed()), lim = ZONES[z.type].limit;
   setText('hSpeed', `${sp} км/ч`);
   setText('hLimit', String(lim));
-  $('hSpeedBox').classList.toggle('over', sp > lim + 10);
+  setClass('hSpeedBox', 'over', sp > lim + 10);
   const badges = [];
   if (g.goose > 0) badges.push(`<span class="badge">🦆 ГУСЬ У РУЛЯ ${Math.ceil(g.goose)}</span>`);
   if (g.energy > 0) badges.push(`<span class="badge energy">⚡ НЕУЯЗВИМ ${Math.ceil(g.energy)}</span>`);
   if (g.event) badges.push(`<span class="badge">${{ commission: '🕴️', rain: '🌧️', herd: '🐾' }[g.event]} ${Math.ceil(g.eventT)} с</span>`);
-  const wb = $('wheelieBtn');
-  wb.classList.toggle('cool', g.wheelieCd > 0 && g.wheelie <= 0);
-  wb.classList.toggle('on', g.wheelie > 0);
+  const wState = g.bike.special === 'roller' ? 'hidden' : g.wheelie > 0 ? 'on' : g.wheelieCd > 0 ? 'cool' : '';
+  if (hudCache.wheelie !== wState) { hudCache.wheelie = wState; $('wheelieBtn').className = 'wheelie-btn ' + wState; }
+  const rState = g.asphalt === 0 ? 'empty' : '';
+  if (hudCache.repair !== rState) { hudCache.repair = rState; $('repairBtn').className = 'repair-btn ' + rState; }
   const html = badges.join('');
   if (hudCache.badges !== html) { hudCache.badges = html; $('badges').innerHTML = html; }
 }
 
 /* ================= Рисование ================= */
-function drawRoad() {
-  const SL = 8;
-  const scroll = (g.dist * S) % 128;
-  const canMove = typeof DOMMatrix !== 'undefined';
-  for (const k of Object.keys(roadPatterns)) {
-    const p = roadPatterns[k];
-    if (p && canMove && p.setTransform) p.setTransform(new DOMMatrix().translate(0, scroll));
+// Дорогу рисуем полосками, но прямоугольники одного цвета собираем в один путь:
+// вместо ~1300 fillRect за кадр — пара десятков fill (сильно легче для слабых телефонов).
+const ROAD_LAYERS = 8;
+const roadBatch = Array.from({ length: ROAD_LAYERS }, () => new Map());
+const roadMatrix = typeof DOMMatrix !== 'undefined' ? new DOMMatrix() : null;
+function rect(layer, style, x, y, w, h) {
+  const m = roadBatch[layer];
+  let a = m.get(style);
+  if (!a) { a = []; m.set(style, a); }
+  a.push(x, y, w, h);
+}
+function flushRoad() {
+  for (const m of roadBatch) {
+    for (const [style, a] of m) {
+      if (!a.length) continue;
+      ctx.fillStyle = style;
+      ctx.beginPath();
+      for (let i = 0; i < a.length; i += 4) ctx.rect(a[i], a[i + 1], a[i + 2], a[i + 3]);
+      ctx.fill();
+      a.length = 0;
+    }
   }
+}
+
+function drawRoad() {
+  const SL = quality.slice;
+  const scroll = (g.dist * S) % 128;
+  if (roadMatrix) {
+    roadMatrix.f = scroll;
+    for (const k in roadPatterns) { const p = roadPatterns[k]; if (p && p.setTransform) p.setTransform(roadMatrix); }
+  }
+  const h = SL + 1;
   for (let y = -SL; y < H + SL; y += SL) {
     const dTop = dOf(y), dBot = dOf(y + SL), d = (dTop + dBot) / 2;
     const z = zoneAt(d), Z = ZONES[z.type];
     const L = roadL(d), R = L + roadW;
-    ctx.fillStyle = Math.floor(d / 70) % 2 ? Z.ground : Z.ground2;
-    ctx.fillRect(0, y, W, SL + 1);
+    const ground = Math.floor(d / 70) % 2 ? Z.ground : Z.ground2;
+    rect(0, ground, 0, y, L, h); rect(0, ground, R, y, W - R, h); // под асфальтом землю не красим
     if (z.type === 'highway') {
-      ctx.fillStyle = '#a39882'; ctx.fillRect(L - 18 * S, y, 18 * S, SL + 1); ctx.fillRect(R, y, 18 * S, SL + 1);
+      rect(1, '#a39882', L - 18 * S, y, 18 * S, h); rect(1, '#a39882', R, y, 18 * S, h);
     } else if (z.type === 'village') {
-      ctx.fillStyle = '#a08a62'; ctx.fillRect(L - 14 * S, y, 14 * S, SL + 1); ctx.fillRect(R, y, 14 * S, SL + 1);
+      rect(1, '#a08a62', L - 14 * S, y, 14 * S, h); rect(1, '#a08a62', R, y, 14 * S, h);
     } else {
-      ctx.fillStyle = Math.floor(d / 22) % 2 ? '#d3cdc1' : '#cbc5b8';
-      ctx.fillRect(L - 34 * S, y, 30 * S, SL + 1); ctx.fillRect(R + 4 * S, y, 30 * S, SL + 1);
-      ctx.fillStyle = '#efefea'; ctx.fillRect(L - 4 * S, y, 4 * S, SL + 1); ctx.fillRect(R, y, 4 * S, SL + 1);
+      const walk = Math.floor(d / 22) % 2 ? '#d3cdc1' : '#cbc5b8';
+      rect(1, walk, L - 34 * S, y, 30 * S, h); rect(1, walk, R + 4 * S, y, 30 * S, h);
+      rect(1, '#efefea', L - 4 * S, y, 4 * S, h); rect(1, '#efefea', R, y, 4 * S, h);
     }
-    ctx.fillStyle = roadPatterns[z.type] || Z.road;
-    ctx.fillRect(L, y, roadW, SL + 1);
+    rect(2, roadPatterns[z.type] || Z.road, L, y, roadW, h);
     if (z.type !== 'village') {
-      ctx.fillStyle = 'rgba(255,255,255,.85)';
-      ctx.fillRect(L + 4 * S, y, 3 * S, SL + 1); ctx.fillRect(R - 7 * S, y, 3 * S, SL + 1);
+      rect(3, 'rgba(255,255,255,.85)', L + 4 * S, y, 3 * S, h); rect(3, 'rgba(255,255,255,.85)', R - 7 * S, y, 3 * S, h);
     }
     if (((d % 80) + 80) % 80 < 46) {
-      ctx.fillStyle = z.type === 'village' ? 'rgba(216,210,196,.55)' : Z.line;
-      ctx.fillRect(L + laneW - 1.5 * S, y, 3 * S, SL + 1); ctx.fillRect(L + 2 * laneW - 1.5 * S, y, 3 * S, SL + 1);
+      const line = z.type === 'village' ? 'rgba(216,210,196,.55)' : Z.line;
+      rect(3, line, L + laneW - 1.5 * S, y, 3 * S, h); rect(3, line, L + 2 * laneW - 1.5 * S, y, 3 * S, h);
     }
     if (z.type === 'highway') {
       // отбойники
-      ctx.fillStyle = '#7d828a'; ctx.fillRect(L - 13 * S, y, 2 * S, SL + 1); ctx.fillRect(R + 13 * S, y, 2 * S, SL + 1);
-      ctx.fillStyle = '#c9cdd3'; ctx.fillRect(L - 12 * S, y, 4 * S, SL + 1); ctx.fillRect(R + 8 * S, y, 4 * S, SL + 1);
+      rect(4, '#7d828a', L - 13 * S, y, 2 * S, h); rect(4, '#7d828a', R + 13 * S, y, 2 * S, h);
+      rect(5, '#c9cdd3', L - 12 * S, y, 4 * S, h); rect(5, '#c9cdd3', R + 8 * S, y, 4 * S, h);
       if (Math.floor(dTop / 45) !== Math.floor(dBot / 45)) {
-        ctx.fillStyle = '#5f646b'; ctx.fillRect(L - 15 * S, y, 5 * S, 5 * S); ctx.fillRect(R + 10 * S, y, 5 * S, 5 * S);
+        rect(6, '#5f646b', L - 15 * S, y, 5 * S, 5 * S); rect(6, '#5f646b', R + 10 * S, y, 5 * S, 5 * S);
       }
     }
   }
-  // разметка поверх: переходы, лежачие полицейские, трещины
+  // разметка поверх: переходы, лежачие полицейские
   for (const s of g.scenery) {
     if (!s.road) continue;
     const y = yOf(s.d);
     if (y < -60 || y > H + 60) continue;
     const L = roadL(s.d);
     if (s.kind === 'zebra') {
-      ctx.fillStyle = 'rgba(255,255,255,.9)';
-      for (let x = L + 8 * S; x < L + roadW - 10 * S; x += 22 * S) ctx.fillRect(x, y - 18 * S, 12 * S, 36 * S);
+      for (let x = L + 8 * S; x < L + roadW - 10 * S; x += 22 * S) rect(7, 'rgba(255,255,255,.9)', x, y - 18 * S, 12 * S, 36 * S);
     } else if (s.kind === 'bump') {
-      for (let x = L, i = 0; x < L + roadW; x += 14 * S, i++) { ctx.fillStyle = i % 2 ? '#111' : '#f1c40f'; ctx.fillRect(x, y - 5 * S, 14 * S, 10 * S); }
+      for (let x = L, i = 0; x < L + roadW; x += 14 * S, i++) rect(7, i % 2 ? '#111' : '#f1c40f', x, y - 5 * S, 14 * S, 10 * S);
     }
   }
+  flushRoad();
   ctx.strokeStyle = 'rgba(0,0,0,.28)'; ctx.lineWidth = 1.5;
+  ctx.beginPath();
   for (const c of g.cracks) {
     const y = yOf(c.d); if (y < -40 || y > H + 40) continue;
     const x = laneX(c.lx, c.d);
-    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(c.a) * c.l * S, y + Math.sin(c.a) * c.l * S);
-    ctx.lineTo(x + Math.cos(c.a + 0.6) * c.l * 1.4 * S, y + Math.sin(c.a + 0.6) * c.l * 1.4 * S); ctx.stroke();
+    ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(c.a) * c.l * S, y + Math.sin(c.a) * c.l * S);
+    ctx.lineTo(x + Math.cos(c.a + 0.6) * c.l * 1.4 * S, y + Math.sin(c.a + 0.6) * c.l * 1.4 * S);
   }
+  ctx.stroke();
 }
 
 function sceneryX(s) {
@@ -1101,11 +1237,15 @@ function sceneryX(s) {
   return s.side < 0 ? L - s.off * S : L + roadW + s.off * S;
 }
 
+const SCENERY_ORDER = Object.fromEntries(['field', 'house', 'block', 'shop', 'club', 'well', 'car', 'pole', 'tree', 'lamp', 'km', 'sign'].map((k, i) => [k, i]));
 function drawScenery() {
   // сначала плоское (поля, дворы), потом высокое
-  const order = ['field', 'house', 'block', 'shop', 'club', 'well', 'car', 'pole', 'tree', 'lamp', 'km', 'sign'];
-  const visible = g.scenery.filter(s => !s.road && s.kind !== 'banner' && yOf(s.d) > -200 && yOf(s.d) < H + 200);
-  visible.sort((a, b) => order.indexOf(a.kind) - order.indexOf(b.kind));
+  const visible = sceneryList; visible.length = 0;
+  for (const s of g.scenery) {
+    if (s.road || s.kind === 'banner' || s.kind === 'arch') continue;
+    const y = yOf(s.d); if (y > -200 && y < H + 200) visible.push(s);
+  }
+  visible.sort((a, b) => (SCENERY_ORDER[a.kind] ?? 99) - (SCENERY_ORDER[b.kind] ?? 99));
   for (const s of visible) {
     const x = sceneryX(s), y = yOf(s.d);
     switch (s.kind) {
@@ -1127,7 +1267,8 @@ function drawScenery() {
 
 function drawObject(o) {
   const x = laneX(o.lx, o.d), y = yOf(o.d);
-  const oo = { ...o, x, y };
+  o.x = x; o.y = y; // экранные координаты для функций рисования (без копии объекта каждый кадр)
+  const oo = o;
   const dir = o.vx >= 0 ? 1 : -1;
   switch (o.type) {
     case 'cone': drawCone(ctx, oo, S); break;
@@ -1153,6 +1294,8 @@ function drawObject(o) {
   }
 }
 
+const FLAT_TYPES = new Set(['pothole', 'puddle', 'glass', 'bottle']);
+const drawList = [], sceneryList = [];
 function draw() {
   ctx.save();
   if (g.shake > 0) ctx.translate(rand(-6, 6) * g.shake * 2, rand(-6, 6) * g.shake * 2);
@@ -1162,15 +1305,19 @@ function draw() {
   for (const o of g.objs) {
     if (o.type !== 'pothole' && o.type !== 'puddle' && o.type !== 'glass') continue;
     const y = yOf(o.d); if (y < -80 || y > H + 80) continue;
-    const oo = { ...o, x: laneX(o.lx, o.d), y };
-    if (o.type === 'glass') drawGlass(ctx, oo, S);
-    else if (o.type === 'puddle' && !o.fixed) drawPuddle(ctx, oo, S, g.t);
-    else drawPothole(ctx, oo, S);
+    o.x = laneX(o.lx, o.d); o.y = y;
+    if (o.type === 'glass') drawGlass(ctx, o, S);
+    else if (o.type === 'puddle' && !o.fixed) drawPuddle(ctx, o, S, g.t);
+    else drawPothole(ctx, o, S);
   }
   drawScenery();
 
   // всё остальное, дальние раньше ближних
-  const rest = g.objs.filter(o => !['pothole', 'puddle', 'glass', 'bottle'].includes(o.type) && !o.dead && yOf(o.d) > -100 && yOf(o.d) < H + 100);
+  const rest = drawList; rest.length = 0;
+  for (const o of g.objs) {
+    if (FLAT_TYPES.has(o.type) || o.dead) continue;
+    const y = yOf(o.d); if (y > -100 && y < H + 100) rest.push(o);
+  }
   rest.sort((a, b) => b.d - a.d);
   for (const o of rest) drawObject(o);
 
@@ -1184,7 +1331,7 @@ function draw() {
   if (!blink || g.over) {
     ctx.save();
     if (g.over) { ctx.translate(px, PY); ctx.rotate(g.overT * 6); ctx.translate(-px, -PY); }
-    const wh = g.wheelie > 0 ? Math.min(1, Math.min(g.wheelie, 1.5 - g.wheelie) * 5) : 0;
+    const wh = g.wheelie > 0 ? Math.min(1, Math.min(g.wheelie, WHEELIE_TIME - g.wheelie) * 5) : 0;
     drawPlayer(ctx, px, PY, S, g.bike, g.t, { lean: g.lean, headTilt: g.headTilt, hurt: g.hurt, angle: roadAngle(g.dist), wheelie: wh });
     ctx.restore();
   }
@@ -1243,7 +1390,7 @@ function finishGame() {
   const r = g;
   g = null;
   const km = r.dist / KM;
-  const pts = Math.max(0, Math.floor(r.dist / 10 + r.bonus));
+  const pts = score(r);
   const money = Math.max(0, r.coins * 10 - r.fines);
   const rankBefore = careerIndex(save.career);
   save.career += pts;
@@ -1295,7 +1442,7 @@ function finishGame() {
   stamp.textContent = sat >= 50 ? 'ПРИНЯТО' : 'НА ДОРАБОТКУ';
   stamp.style.animation = 'none'; void stamp.offsetWidth; stamp.style.animation = '';
   setTimeout(sfx.stamp, 300);
-  setTimeout(() => Voice.speak(vtext, 'chief', 3), 900);
+  setTimeout(() => { if (!g) Voice.speak(vtext, 'chief', 3); }, 900); // если уже начал новую смену — молчим
 
   $('newRecord').classList.toggle('hidden', !newRec);
   const promo = $('promo');
@@ -1421,7 +1568,7 @@ cv.addEventListener('pointerdown', e => {
   const r = cv.getBoundingClientRect();
   const x = e.clientX - r.left, y = e.clientY - r.top;
   const target = repairTargetAt(x, y);
-  if (target) { tryRepair(target); return; }
+  if (target && inMyLane(target)) { tryRepair(target); return; }
   move(x < W / 2 ? -1 : 1);
 });
 
@@ -1434,15 +1581,24 @@ document.addEventListener('keydown', e => {
   if (['ArrowDown', 'Shift', 's', 'S', 'ы', 'Ы'].includes(e.key)) { wheelie(); e.preventDefault(); return; }
   if ([' ', 'ArrowUp', 'w', 'W', 'ц', 'Ц'].includes(e.key)) {
     e.preventDefault();
-    const o = nearestAhead();
-    if (o) tryRepair(o); else if (g.asphalt === 0) sfx.dud();
+    repairAhead();
   }
 });
 
-document.addEventListener('visibilitychange', () => { if (document.hidden) pauseGame(); });
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) return;
+  pauseGame();
+  // свёрнуто — звук усыпляем, проснётся от первого касания
+  for (const a of [audio, Voice.actx]) if (a && a.state === 'running') a.suspend().catch(() => { /* не страшно */ });
+});
+// Телефоны дают включить звук только по касанию: будим звук на каждое отпускание пальца и клик
+for (const ev of ['pointerup', 'touchend', 'click']) {
+  document.addEventListener(ev, () => { ac(); if (Voice.enabled) Voice.warm(); }, { capture: true, passive: true });
+}
 
 $('pauseBtn').addEventListener('click', pauseGame);
 $('wheelieBtn').addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); Voice.warm(); wheelie(); });
+$('repairBtn').addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); Voice.warm(); repairAhead(); });
 $('playBtn').addEventListener('click', startGame);
 $('againBtn').addEventListener('click', startGame);
 $('garageBtn').addEventListener('click', () => { renderGarage(); showScreen('garage'); });
@@ -1452,10 +1608,12 @@ $('resMenu').addEventListener('click', () => { Voice.stop(); renderMenu(); showS
 document.querySelectorAll('[data-back]').forEach(b => b.addEventListener('click', () => { renderMenu(); showScreen('menu'); }));
 $('howBtn').addEventListener('click', () => showHowTo(false));
 $('videoClose').addEventListener('click', closeVideo);
+$('videoModal').addEventListener('click', e => { if (e.target === e.currentTarget) closeVideo(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('videoModal').classList.contains('hidden')) closeVideo(); });
 $('soundBtn').addEventListener('click', () => { save.sound = !save.sound; persist(); renderMenu(); if (save.sound) sfx.coin(); });
 $('voiceBtn').addEventListener('click', () => {
   save.voice = !save.voice; Voice.enabled = save.voice;
-Voice.uncensored = save.mat; persist(); renderMenu();
+  persist(); renderMenu();
   if (save.voice) { Voice.warm(); Voice.speak(save.mat ? 'Голоса включены, бл*!' : 'Голоса включены!', 'valera', 3); }
   else Voice.stop();
 });

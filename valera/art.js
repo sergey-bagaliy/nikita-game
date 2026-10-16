@@ -485,11 +485,15 @@ function drawTree(ctx, x, y, s, kind) {
 
 function drawSunflowers(ctx, x, y, s, o) {
   ctx.fillStyle = '#4f7a2a'; ctx.fillRect(x - o.w / 2, y - o.h / 2, o.w, o.h);
-  for (let yy = -o.h / 2 + 6 * s; yy < o.h / 2; yy += 11 * s) {
-    for (let xx = -o.w / 2 + 6 * s; xx < o.w / 2; xx += 11 * s) {
-      ctx.fillStyle = '#f7c600'; ctx.beginPath(); ctx.arc(x + xx, y + yy, 4 * s, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#6b3e12'; ctx.beginPath(); ctx.arc(x + xx, y + yy, 1.8 * s, 0, Math.PI * 2); ctx.fill();
+  // все цветки одного цвета — одним путём (сотни fill за кадр заметно тормозят телефон)
+  for (const [color, r] of [['#f7c600', 4], ['#6b3e12', 1.8]]) {
+    ctx.fillStyle = color; ctx.beginPath();
+    for (let yy = -o.h / 2 + 6 * s; yy < o.h / 2; yy += 11 * s) {
+      for (let xx = -o.w / 2 + 6 * s; xx < o.w / 2; xx += 11 * s) {
+        ctx.moveTo(x + xx + r * s, y + yy); ctx.arc(x + xx, y + yy, r * s, 0, Math.PI * 2);
+      }
     }
+    ctx.fill();
   }
 }
 
@@ -549,11 +553,13 @@ function drawClub(ctx, x, y, s, o, side, t) {
   ctx.fillStyle = '#2b1d3a'; ctx.fillRect(x - o.w / 2, y - o.h / 2, o.w, o.h);
   ctx.fillStyle = '#3d2a52'; ctx.fillRect(x - o.w / 2 + 4 * s, y - o.h / 2 + 4 * s, o.w - 8 * s, o.h - 8 * s);
   const sx = side < 0 ? x + o.w / 2 - 14 * s : x - o.w / 2;
-  ctx.save();
-  ctx.shadowColor = '#ff2bd6'; ctx.shadowBlur = 12 + Math.sin(t * 10) * 6;
-  ctx.fillStyle = Math.sin(t * 7) > -0.7 ? '#ff4fe0' : '#8a2a7c';
+  // неон: мягкое свечение двумя полупрозрачными рамками (shadowBlur на телефонах очень дорогой)
+  const on = Math.sin(t * 7) > -0.7, glow = (on ? 0.22 : 0.08) + Math.sin(t * 10) * 0.05;
+  ctx.fillStyle = `rgba(255,43,214,${glow})`;
+  ctx.fillRect(sx - 8 * s, y - o.h / 2 - 4 * s, 30 * s, o.h + 8 * s);
+  ctx.fillRect(sx - 4 * s, y - o.h / 2, 22 * s, o.h);
+  ctx.fillStyle = on ? '#ff4fe0' : '#8a2a7c';
   ctx.fillRect(sx, y - o.h / 2 + 4 * s, 14 * s, o.h - 8 * s);
-  ctx.restore();
   ctx.save();
   ctx.translate(sx + 7 * s, y);
   ctx.rotate(side < 0 ? Math.PI / 2 : -Math.PI / 2);
