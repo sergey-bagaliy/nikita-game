@@ -74,6 +74,8 @@ h1 span { color: var(--yellow); }
 .btn-go:active { box-shadow: 0 2px 0 #b58f00; }
 .btn-small { font-size: .95rem; padding: 11px 8px; }
 .btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.btn-row.three { grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+.btn-row.three .btn { font-size: .85rem; padding: 11px 4px; }
 
 .switch { display: flex; align-items: center; gap: 12px; background: var(--panel); border-radius: 14px; padding: 12px 14px; cursor: pointer; margin-bottom: 6px; }
 .switch input { display: none; }
@@ -134,11 +136,23 @@ h1 span { color: var(--yellow); }
 .bubble {
   margin: 10px auto 0; max-width: 340px;
   background: #fff; color: #1a1a1a;
-  border-radius: 16px; padding: 10px 14px;
+  border-radius: 16px; padding: 8px 14px 10px;
   font-weight: 800; font-size: 1.05rem; text-align: center;
   box-shadow: 0 6px 16px rgba(0,0,0,.35);
+  border-left: 8px solid #999;
   animation: pop .25s ease;
 }
+.bubble .who { display: block; font-size: .75rem; text-transform: uppercase; letter-spacing: 1px; opacity: .7; margin-bottom: 2px; }
+.bubble.r-valera { border-color: #e0262b; }
+.bubble.r-motya { border-color: #ff6a00; background: #fff3e6; }
+.bubble.r-chief { border-color: #1f1f24; background: #ffe9e9; }
+.bubble.r-acc { border-color: #8e44ad; background: #f5ecff; }
+.bubble.r-granny { border-color: #6c5ce7; background: #f1efff; }
+.bubble.r-passer { border-color: #16a085; }
+.bubble.r-worker { border-color: #ff8a00; background: #fff8e1; }
+.speed-box { display: flex; align-items: center; gap: 6px; background: rgba(20,20,24,.6); border-radius: 10px; padding: 3px 10px 3px 4px; font-size: .85rem; font-weight: 800; }
+.speed-box .limit { width: 26px; height: 26px; border-radius: 50%; background: #fff; color: #111; border: 3px solid #d0021b; display: grid; place-items: center; font-size: .7rem; font-weight: 900; }
+.speed-box.over { background: rgba(208, 2, 27, .85); }
 @keyframes pop { from { transform: scale(.6); opacity: 0; } }
 
 .overlay { position: absolute; inset: 0; background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center; padding: 16px; }
