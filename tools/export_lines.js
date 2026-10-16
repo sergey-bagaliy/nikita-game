@@ -13,7 +13,7 @@ const D = vm.runInNewContext(src, {});
 
 // Кто произносит фразы каждой группы PHRASES
 const CATEGORY_ROLE = {
-  granny: 'granny', passer: 'passer', camera: 'accountant', support: 'friend', supportHit: 'friend',
+  granny: 'granny', passer: 'passer', camera: 'accountant', support: 'friend', supportHit: 'friend', navigator: 'navigator', cameraBot: 'camerabot', autoresp: 'autoresp',
   motyaThrow: 'motya', motyaBike: 'motya', motyaKick: 'motya', motyaLying: 'motya', motyaRun: 'motya', motyaHit: 'motya',
 };
 

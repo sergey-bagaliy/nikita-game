@@ -57,7 +57,11 @@ VOICES = {
     'drunk':      ('uk:1',   1.30, 0.90, -250, ['tremolo', '3', '20']),
     'ded':        ('uk:1',   1.15, 0.80, -150, ['tremolo', '5', '12']),
     'taxi':       ('ruslan', 0.80, 0.75,   80, []),
-    'friend':     ('dmitri', 0.88, 0.85,   80, ['sinc', '350-3400', 'overdrive', '3', 'gain', '-2']),
+    'friend':     ('ruslan', 0.85, 0.90,  180, ['sinc', '350-3400', 'overdrive', '3', 'gain', '-2']),
+    # роботы — нарочно «компьютерные» голоса RHVoice
+    'navigator':  ('rh:elena',    1.0, 0, 0, ['highpass', '200']),
+    'camerabot':  ('rh:aleksandr', 0.95, 0, -100, ['sinc', '400-4000', 'echo', '0.8', '0.6', '30', '0.3']),
+    'autoresp':   ('rh:victoria', 1.0, 0, 0, ['sinc', '300-3400']),
     'rabochiy':   ('ruslan', 1.00, 0.70,    0, []),
     'traktorist': ('uk:1',   1.00, 0.75,  -50, []),
     'katok':      ('dmitri', 1.05, 0.70, -200, []),
@@ -192,6 +196,23 @@ def to_balachka(text, data):
     return re.sub(r'[а-яё]+', conv, t)
 
 
+def rh_text(text):
+    """Текст для RHVoice: ударения из нашего словаря ставятся знаком «+» перед ударной гласной."""
+    def fix(m):
+        w = m.group(0)
+        n = STRESS.get(w.lower())
+        if not n:
+            return w
+        k = 0
+        for i, ch in enumerate(w):
+            if ch.lower() in VOWELS:
+                k += 1
+                if k == n:
+                    return w[:i] + '+' + w[i:]
+        return w
+    return re.sub(r'[А-Яа-яЁё]+', fix, text)
+
+
 class UkrVoice:
     """Украинская многоголосая модель Piper (читает буквы, понимает знак ударения)."""
     def __init__(self, models_dir):
@@ -288,6 +309,8 @@ def main():
             if model.startswith('uk:'):
                 eng = engines.get('uk') or engines.setdefault('uk', UkrVoice(models_dir))
                 pcm = eng.synth(to_balachka(text, data), int(model[3:]), length, noise)
+            elif model.startswith('rh:'):
+                pcm = None
             elif model == 'mms':
                 eng = engines.get('mms') or engines.setdefault('mms', MmsVoice(models_dir))
                 pcm = eng.synth(text, length)
@@ -296,8 +319,12 @@ def main():
                 pcm = eng.synth(phonemize(text, data), length, noise)
             with tempfile.TemporaryDirectory() as tmp:
                 raw, fin = os.path.join(tmp, 'raw.wav'), os.path.join(tmp, 'fin.wav')
-                with wave.open(raw, 'wb') as w:
-                    w.setnchannels(1); w.setsampwidth(2); w.setframerate(eng.rate); w.writeframes(pcm.tobytes())
+                if pcm is None:
+                    subprocess.run(['RHVoice-test', '-p', model[3:], '-r', str(int(100 / length)), '-o', raw],
+                                   input=rh_text(text).encode('utf-8'), check=True, capture_output=True)
+                else:
+                    with wave.open(raw, 'wb') as w:
+                        w.setnchannels(1); w.setsampwidth(2); w.setframerate(eng.rate); w.writeframes(pcm.tobytes())
                 eff = (['pitch', str(pitch)] if pitch else []) + fx + (PHONE_FX if phone else []) + ['norm', '-1', 'rate', '22050']
                 subprocess.run(['sox', raw, fin] + eff, check=True, capture_output=True)
                 subprocess.run(['lame', '--quiet', '-b', '48', '-m', 'm', fin, path], check=True)
