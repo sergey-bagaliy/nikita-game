@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Озвучка «Ямщика» нейросетевыми голосами Piper (бесплатно, работает без интернета).
 
-Голоса: Дмитрий, Денис, Руслан (мужские), Ирина (женский) — модели vits-piper-ru_RU-*-medium
-из релизов k2-fsa/sherpa-onnx на GitHub. Произношение — espeak-ng со своим словарём ударений.
+Голоса: Дмитрий, Денис, Руслан (мужские), Ирина (женский) — модели vits-piper-ru_RU-*-medium;
+станичные деды и бабки говорят «балачкой» — украинская модель vits-piper-uk_UA-ukrainian_tts-medium
+(Лада, Микита, Тетяна); формальные персонажи — vits-mms-rus. Всё из релизов k2-fsa/sherpa-onnx на GitHub.
+Произношение — espeak-ng со своим словарём ударений.
 
 Что нужно:
     sudo apt install espeak-ng sox lame
@@ -40,35 +42,35 @@ VOICES = {
     'motya':      ('ruslan', 0.90, 0.80, -100, ['overdrive', '2']),
     'chief':      ('denis',  0.85, 0.80, -200, ['overdrive', '6', 'gain', '-3']),
     'accountant': ('irina',  1.10, 0.60,  -50, []),
-    'granny':     ('irina',  1.15, 0.70,  250, ['tremolo', '6', '30']),
-    'babka':      ('irina',  0.85, 0.85,  200, ['overdrive', '4', 'gain', '-2']),
+    'granny':     ('uk:2',   1.15, 0.70,  150, ['tremolo', '6', '30']),
+    'babka':      ('uk:0',   0.90, 0.85,  100, ['overdrive', '3', 'gain', '-2']),
     'passer':     ('denis',  0.95, 0.70,    0, []),
-    'inspector':  ('ruslan', 1.10, 0.60, -100, []),
+    'inspector':  ('mms',    1.10, 0.60, -100, []),
     'brother':    ('dmitri', 1.00, 0.75,  150, []),
     'master':     ('denis',  0.90, 0.75, -100, ['overdrive', '3']),
     'prorab':     ('ruslan', 0.85, 0.85, -250, ['overdrive', '6', 'gain', '-3']),
     'driver':     ('ruslan', 1.05, 0.70, -300, []),
     'engineer':   ('dmitri', 1.00, 0.65,   60, []),
     'director':   ('denis',  1.15, 0.60, -200, ['reverb', '25']),
-    'deputy':     ('ruslan', 1.20, 0.60,  -80, ['reverb', '50', 'echo', '0.8', '0.7', '60', '0.2']),
+    'deputy':     ('mms',    1.15, 0.60,  -80, ['reverb', '50', 'echo', '0.8', '0.7', '60', '0.2']),
     'tax':        ('irina',  1.20, 0.55,    0, ['echo', '0.8', '0.7', '40', '0.25']),
-    'drunk':      ('dmitri', 1.30, 0.90, -250, ['tremolo', '3', '20']),
-    'ded':        ('denis',  1.25, 0.80, -200, ['tremolo', '5', '12']),
+    'drunk':      ('uk:1',   1.30, 0.90, -250, ['tremolo', '3', '20']),
+    'ded':        ('uk:1',   1.15, 0.80, -150, ['tremolo', '5', '12']),
     'taxi':       ('ruslan', 0.80, 0.75,   80, []),
     'friend':     ('dmitri', 0.88, 0.85,   80, ['sinc', '350-3400', 'overdrive', '3', 'gain', '-2']),
     'rabochiy':   ('ruslan', 1.00, 0.70,    0, []),
-    'traktorist': ('denis',  1.10, 0.75, -150, []),
+    'traktorist': ('uk:1',   1.00, 0.75,  -50, []),
     'katok':      ('dmitri', 1.05, 0.70, -200, []),
     'ukladchik':  ('ruslan', 1.00, 0.70,   50, []),
     'greyder':    ('denis',  1.05, 0.70, -100, []),
     'ekskavator': ('dmitri', 1.00, 0.75, -150, ['overdrive', '2']),
     'geodezist':  ('denis',  1.00, 0.65,  100, []),
     'laborant':   ('irina',  1.00, 0.65,   50, []),
-    'signal':     ('irina',  0.90, 0.85,  150, ['overdrive', '3', 'gain', '-2']),
+    'signal':     ('uk:0',   0.90, 0.85,  100, ['overdrive', '3', 'gain', '-2']),
     'nachuch':    ('ruslan', 0.90, 0.80, -150, ['overdrive', '5', 'gain', '-3']),
-    'tehnadzor':  ('dmitri', 1.20, 0.55,  -50, ['reverb', '20']),
+    'tehnadzor':  ('mms',    1.15, 0.55,  -50, ['reverb', '20']),
     'snab':       ('denis',  0.80, 0.75,  100, []),
-    'kladovshik': ('irina',  0.95, 0.70,  100, []),
+    'kladovshik': ('uk:2',   0.95, 0.70,   50, []),
     'mehanik':    ('ruslan', 1.05, 0.70, -200, []),
 }
 PHONE_FX = ['sinc', '300-3400', 'overdrive', '3', 'gain', '-2']
@@ -87,14 +89,16 @@ STRESS = {
     'проспись': 2, 'прошлого': 1, 'прошлую': 1, 'разогнаться': 3, 'раньше': 1, 'распишитесь': 3,
     'родная': 2, 'роспись': 1, 'сраные': 1, 'съебись': 2, 'трасса': 1, 'трассы': 1, 'трогай': 1,
     'управление': 3, 'чмошник': 1, 'шаурма': 3, 'толкача': 3, 'мотя': 1, 'валера': 2,
-    'красноармейка': 4, 'красноармейки': 4,
+    'красноармейка': 4, 'красноармейки': 4, 'тебе': 2,
 }
 
 
 def prepare_espeak():
     """Собирает словарь espeak-ng с нашими ударениями в отдельную папку."""
     data = os.path.join(ESPEAK_DIR, 'data')
-    if os.path.exists(os.path.join(data, 'ru_dict.ok')):
+    stamp = json.dumps(STRESS, ensure_ascii=False, sort_keys=True)
+    ok = os.path.join(data, 'ru_dict.ok')
+    if os.path.exists(ok) and open(ok, encoding='utf-8').read() == stamp:
         return data
     src = os.path.join(ESPEAK_DIR, 'src')
     os.makedirs(src, exist_ok=True)
@@ -110,7 +114,7 @@ def prepare_espeak():
         shutil.rmtree(data)
     shutil.copytree(sys_data, data)
     subprocess.run(['espeak-ng', '--compile=ru'], cwd=src, env={**os.environ, 'ESPEAK_DATA_PATH': data}, check=True, capture_output=True)
-    open(os.path.join(data, 'ru_dict.ok'), 'w').close()
+    open(ok, 'w', encoding='utf-8').write(stamp)
     return data
 
 
@@ -138,6 +142,104 @@ def phonemize(text, data):
                              env={**os.environ, 'ESPEAK_DATA_PATH': data}, capture_output=True).stdout.decode('utf-8')
         out.append(' '.join(ipa.split()) + ' ')
     return unicodedata.normalize('NFD', ''.join(out).strip())
+
+
+VOWELS = 'аеёиоуыэюя'
+ESPEAK_VOWELS = set('aAVe@EiIoOuUy')
+
+
+def stressed_index(words, data):
+    """Номер ударной гласной (с нуля) в каждом слове — по словарю espeak-ng с нашими ударениями."""
+    out = subprocess.run(['espeak-ng', '-v', 'ru', '-q', '-x'], input='\n'.join(words).encode('utf-8'),
+                         env={**os.environ, 'ESPEAK_DATA_PATH': data}, capture_output=True).stdout.decode('utf-8').split()
+    res = []
+    for w, p in zip(words, out):
+        if 'ё' in w:
+            res.append(sum(1 for c in w[:w.index('ё')] if c in VOWELS))
+        elif "'" in p:
+            q = p.replace('@-', '')  # «@-» — связка согласных у espeak, это не гласная
+            res.append(sum(1 for c in q[:q.index("'")] if c in ESPEAK_VOWELS))
+        else:
+            res.append(-1)
+    return res
+
+
+def to_balachka(text, data):
+    """Русский текст → украинскими буквами со знаками ударения (кубанский выговор)."""
+    t = text.lower()
+    words = re.findall(r'[а-яё]+', t)
+    stress = dict(zip(words, stressed_index(words, data))) if words else {}
+
+    def conv(m):
+        w = m.group(0)
+        si, vi, out = stress.get(w, -1), 0, ''
+        for i, ch in enumerate(w):
+            prev = w[i - 1] if i else ''
+            soft_start = not prev or prev in VOWELS or prev in 'ъь'
+            if ch == 'и': rep = 'і'
+            elif ch == 'ы': rep = 'и'
+            elif ch == 'э': rep = 'е'
+            elif ch == 'е': rep = 'є' if soft_start else 'е'
+            elif ch == 'ё': rep = 'йо' if soft_start else 'ьо'
+            elif ch == 'ъ': rep = "'"
+            else: rep = ch
+            out += rep
+            if ch in VOWELS:
+                if vi == si and sum(1 for c in w if c in VOWELS) > 1:
+                    out += '\u0301'
+                vi += 1
+        return out
+    return re.sub(r'[а-яё]+', conv, t)
+
+
+class UkrVoice:
+    """Украинская многоголосая модель Piper (читает буквы, понимает знак ударения)."""
+    def __init__(self, models_dir):
+        base = os.path.join(models_dir, 'vits-piper-uk_UA-ukrainian_tts-medium', 'uk_UA-ukrainian_tts-medium.onnx')
+        self.sess = ort.InferenceSession(base, providers=['CPUExecutionProvider'])
+        cfg = json.load(open(base + '.json', encoding='utf-8'))
+        self.ids = cfg['phoneme_id_map']
+        self.rate = cfg['audio']['sample_rate']
+
+    def synth(self, text, sid, length_scale, noise_scale):
+        ids = list(self.ids['^'])
+        for ch in unicodedata.normalize('NFC', text).replace('і\u0301', 'і\u0301'):
+            for c in unicodedata.normalize('NFD', ch) if ch not in self.ids else [ch]:
+                if c in self.ids and c not in ('^', '$', '_'):
+                    ids += self.ids[c] + self.ids['_']
+        ids += self.ids['$']
+        audio = self.sess.run(None, {
+            'input': np.array([ids], dtype=np.int64),
+            'input_lengths': np.array([len(ids)], dtype=np.int64),
+            'scales': np.array([noise_scale, length_scale, 0.8], dtype=np.float32),
+            'sid': np.array([sid], dtype=np.int64),
+        })[0].squeeze()
+        audio = audio / max(0.01, np.abs(audio).max()) * 0.95
+        return (audio * 32767).astype(np.int16)
+
+
+class MmsVoice:
+    """Русская модель MMS (Meta): ещё один мужской голос, читает буквы."""
+    def __init__(self, models_dir):
+        import sherpa_onnx
+        d = os.path.join(models_dir, 'vits-mms-rus')
+        cfg = sherpa_onnx.OfflineTtsConfig(model=sherpa_onnx.OfflineTtsModelConfig(
+            vits=sherpa_onnx.OfflineTtsVitsModelConfig(model=os.path.join(d, 'model.onnx'), tokens=os.path.join(d, 'tokens.txt')),
+            num_threads=2))
+        self.tts = sherpa_onnx.OfflineTts(cfg)
+        self.rate = 16000
+
+    def synth(self, text, length_scale):
+        chunks = [c.strip() for c in re.split(r'[,.!?;:]+', text.lower()) if c.strip()]
+        pause = np.zeros(int(self.rate * 0.18), dtype=np.float32)
+        parts = []
+        for c in chunks:
+            a = self.tts.generate(c, sid=0, speed=1.0 / length_scale)
+            self.rate = a.sample_rate
+            parts += [np.array(a.samples, dtype=np.float32), pause]
+        audio = np.concatenate(parts) if parts else np.zeros(1600, dtype=np.float32)
+        audio = audio / max(0.01, np.abs(audio).max()) * 0.95
+        return (audio * 32767).astype(np.int16)
 
 
 class Piper:
@@ -178,16 +280,25 @@ def main():
         base = role.split(':', 1)[1] if phone else role
         model, length, noise, pitch, fx = VOICES.get(base, VOICES['valera'])
         key = role + '|' + ln['text']
-        name = hashlib.md5(('neural|' + key).encode('utf-8')).hexdigest()[:10] + '.mp3'
+        sig = repr((VOICES.get(base), phone, 3))
+        name = hashlib.md5(('neural|' + key + sig).encode('utf-8')).hexdigest()[:10] + '.mp3'
         path = os.path.join(OUT_DIR, name)
         if not os.path.exists(path):
-            eng = engines.get(model) or engines.setdefault(model, Piper(models_dir, model))
-            pcm = eng.synth(phonemize(clean_text(ln['text']), data), length, noise)
+            text = clean_text(ln['text'])
+            if model.startswith('uk:'):
+                eng = engines.get('uk') or engines.setdefault('uk', UkrVoice(models_dir))
+                pcm = eng.synth(to_balachka(text, data), int(model[3:]), length, noise)
+            elif model == 'mms':
+                eng = engines.get('mms') or engines.setdefault('mms', MmsVoice(models_dir))
+                pcm = eng.synth(text, length)
+            else:
+                eng = engines.get(model) or engines.setdefault(model, Piper(models_dir, model))
+                pcm = eng.synth(phonemize(text, data), length, noise)
             with tempfile.TemporaryDirectory() as tmp:
                 raw, fin = os.path.join(tmp, 'raw.wav'), os.path.join(tmp, 'fin.wav')
                 with wave.open(raw, 'wb') as w:
                     w.setnchannels(1); w.setsampwidth(2); w.setframerate(eng.rate); w.writeframes(pcm.tobytes())
-                eff = (['pitch', str(pitch)] if pitch else []) + fx + (PHONE_FX if phone else []) + ['norm', '-1']
+                eff = (['pitch', str(pitch)] if pitch else []) + fx + (PHONE_FX if phone else []) + ['norm', '-1', 'rate', '22050']
                 subprocess.run(['sox', raw, fin] + eff, check=True, capture_output=True)
                 subprocess.run(['lame', '--quiet', '-b', '48', '-m', 'm', fin, path], check=True)
         mapping[key] = 'voice/' + name
