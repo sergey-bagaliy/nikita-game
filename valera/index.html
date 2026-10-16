@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#1f1f24">
+  <meta name="description" content="ЯМЩИК — Валера против ям. Симулятор дорожного ремонта на мотоцикле">
+  <title>ЯМЩИК — Валера против ям</title>
+  <link rel="icon" type="image/png" href="icon-192.png">
+  <link rel="apple-touch-icon" href="icon-180.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Ямщик">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- ===== Меню ===== -->
+  <section id="menu" class="screen active">
+    <div class="wrap">
+      <div class="stripes"></div>
+      <div class="hero">
+        <div class="hero-face"><img src="valera-face.jpg" alt="Валера"></div>
+        <h1>Ям<span>щик</span></h1>
+        <p class="sub">Валера против ям. Дорожный беспредел от ООО «Красноармейка»</p>
+      </div>
+
+      <div class="rank-card">
+        <div class="rank-icon" id="rankIcon">⛏️</div>
+        <div class="rank-info">
+          <small>Должность в «Красноармейке»</small>
+          <b id="rankName">Гастарбайтер с лопатой</b>
+          <div class="rank-bar"><i id="rankBar"></i></div>
+          <small id="rankNext"></small>
+        </div>
+      </div>
+
+      <div class="stats-row">
+        <div><b id="mBest">0</b><span>🏆 рекорд</span></div>
+        <div><b id="mKm">0</b><span>🛣️ лучший км</span></div>
+        <div><b id="mBank">0</b><span>💰 в кассе, ₽</span></div>
+      </div>
+
+      <button id="playBtn" class="btn btn-go" type="button">🏍️ На смену!</button>
+      <div class="btn-row">
+        <button id="garageBtn" class="btn" type="button">🔧 Гараж</button>
+        <button id="archiveBtn" class="btn" type="button">🎬 Компромат</button>
+      </div>
+      <div class="btn-row">
+        <button id="howBtn" class="btn btn-small" type="button">❓ Как играть</button>
+        <button id="soundBtn" class="btn btn-small" type="button">🔊 Звук</button>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="matToggle">
+        <span class="switch-ui"></span>
+        <span class="switch-text">🔞 Режим прораба <small>(с матом)</small></span>
+      </label>
+      <p class="tip" id="tip"></p>
+      <div class="stripes"></div>
+    </div>
+  </section>
+
+  <!-- ===== Игра ===== -->
+  <section id="game" class="screen game">
+    <canvas id="cv"></canvas>
+    <div class="hud">
+      <div class="hud-row">
+        <button id="pauseBtn" class="hud-btn" type="button" aria-label="Пауза">⏸</button>
+        <div class="hud-pill" id="hHelmets">⛑️ 3</div>
+        <div class="hud-pill" id="hAsphalt">🪣 1/3</div>
+        <div class="hud-pill score" id="hScore">0</div>
+      </div>
+      <div class="hud-row small">
+        <div class="hud-stage" id="hStage">Этап 1: Двор</div>
+        <div class="hud-km" id="hKm">0.00 км</div>
+      </div>
+      <div class="badges" id="badges"></div>
+      <div class="event hidden" id="eventBanner"></div>
+      <div class="bubble hidden" id="bubble"></div>
+    </div>
+    <div class="overlay hidden" id="ovl">
+      <div class="dialog" id="dialog"></div>
+    </div>
+  </section>
+
+  <!-- ===== Итоги смены ===== -->
+  <section id="result" class="screen">
+    <div class="wrap">
+      <div class="act">
+        <div class="act-head">
+          <div>ООО «КРАСНОАРМЕЙКА»</div>
+          <div>АКТ ВЫПОЛНЕННЫХ РАБОТ</div>
+          <small id="actNum"></small>
+        </div>
+        <table class="act-table" id="actTable"></table>
+        <div class="act-sat">Начальник доволен на <b id="actSat">0%</b></div>
+        <div class="act-verdict" id="actVerdict"></div>
+        <div class="stamp" id="stamp">ПРИНЯТО</div>
+        <div class="act-sign">Прораб: ____________ /Валера/</div>
+      </div>
+      <div class="newrec hidden" id="newRecord">🏆 Новый рекорд!</div>
+      <div class="promo hidden" id="promo"></div>
+      <div class="unlocks hidden" id="unlocks"></div>
+      <button id="againBtn" class="btn btn-go" type="button">🏍️ Ещё смена</button>
+      <div class="btn-row">
+        <button id="resGarage" class="btn" type="button">🔧 Гараж</button>
+        <button id="resMenu" class="btn" type="button">🏠 Меню</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Гараж ===== -->
+  <section id="garage" class="screen">
+    <div class="wrap">
+      <div class="page-head">
+        <button class="back" type="button" data-back>←</button>
+        <h2>Гараж</h2>
+        <div class="bank">💰 <b id="gBank">0</b> ₽</div>
+      </div>
+      <div class="bikes" id="bikes"></div>
+      <p class="tip">Деньги — это монеты ₽, собранные на смене.</p>
+    </div>
+  </section>
+
+  <!-- ===== Компромат ===== -->
+  <section id="archive" class="screen">
+    <div class="wrap">
+      <div class="page-head">
+        <button class="back" type="button" data-back>←</button>
+        <h2>Компромат на Валеру</h2>
+      </div>
+      <p class="tip">Выполняй задания — открывай секретные видео с Валерой.</p>
+      <div class="achs" id="achs"></div>
+    </div>
+  </section>
+
+  <!-- ===== Видео ===== -->
+  <div class="modal hidden" id="videoModal">
+    <div class="modal-box">
+      <div class="modal-title" id="videoTitle"></div>
+      <video id="video" controls playsinline preload="metadata"></video>
+      <div class="video-missing hidden" id="videoMissing">📼 Плёнка ещё в проявке. Скоро завезут!</div>
+      <button id="videoClose" class="btn" type="button">Закрыть</button>
+    </div>
+  </div>
+
+  <script src="data.js"></script>
+  <script src="art.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>
