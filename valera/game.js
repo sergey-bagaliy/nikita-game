@@ -100,6 +100,7 @@ const sfx = {
 };
 Voice.beep = () => { if (save.sound) sfx.beep(); };
 Voice.enabled = save.voice;
+Voice.uncensored = save.mat;
 
 function engineStart() {
   const a = ac(); if (!a || engine) return;
@@ -305,6 +306,7 @@ function startGame() {
   $('bubble').classList.add('hidden');
   $('eventBanner').classList.add('hidden');
   Voice.warm();
+  setTimeout(() => Voice.prefetch(save.mat), 1500);
   updateHud(true);
   if (!save.tutorial) showHowTo(true);
   else engineStart();
@@ -887,7 +889,7 @@ function bossCall(stage) {
     <p><b>Этап ${stage + 1}: ${st.name}</b></p>
     <button class="btn btn-go" id="okBoss" type="button">Понял, работаю 🫡</button>`);
   $('okBoss').onclick = () => { Voice.stop(); resumeGame(); };
-  setTimeout(() => { if (g && g.paused) Voice.speak(text, roleId === 'accountant' ? 'accountant' : 'chief', 3); }, 700);
+  setTimeout(() => { if (g && g.paused) Voice.speak(text, 'phone:' + roleId, 3); }, 700);
 }
 
 const HOWTO = `<h3>Как работать</h3>
@@ -1310,6 +1312,7 @@ function closeVideo() {
 
 /* ================= Управление ================= */
 cv.addEventListener('pointerdown', e => {
+  Voice.warm();
   if (!g || g.paused || g.over) return;
   e.preventDefault();
   const r = cv.getBoundingClientRect();
@@ -1346,13 +1349,15 @@ $('howBtn').addEventListener('click', () => showHowTo(false));
 $('videoClose').addEventListener('click', closeVideo);
 $('soundBtn').addEventListener('click', () => { save.sound = !save.sound; persist(); renderMenu(); if (save.sound) sfx.coin(); });
 $('voiceBtn').addEventListener('click', () => {
-  save.voice = !save.voice; Voice.enabled = save.voice; persist(); renderMenu();
+  save.voice = !save.voice; Voice.enabled = save.voice;
+Voice.uncensored = save.mat; persist(); renderMenu();
   if (save.voice) { Voice.warm(); Voice.speak(save.mat ? 'Голоса включены, бл*!' : 'Голоса включены!', 'valera', 3); }
   else Voice.stop();
 });
 $('matToggle').addEventListener('change', e => {
   save.mat = e.target.checked; persist();
-  if (save.mat) { sfx.honk(); $('tip').textContent = 'Режим прораба включён. Валера больше не сдерживается.'; Voice.speak('Режим прораба, бл*!', 'prorab', 3); }
+  Voice.uncensored = save.mat;
+  if (save.mat) { sfx.honk(); $('tip').textContent = 'Режим прораба включён. Валера больше не сдерживается.'; Voice.warm(); Voice.speak('Режим прораба, бл*! Ну всё, п*здец, понеслась!', 'prorab', 3); }
   else $('tip').textContent = 'Режим прораба выключен. Валера снова культурный.';
 });
 
