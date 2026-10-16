@@ -183,7 +183,7 @@ function newGame() {
     zones: [], curZone: null, villageN: 0,
     objs: [], scenery: [], cracks: [], parts: [], floats: [],
     nextRowD: 600, nextSceneryD: [0, 0], nextCrackD: 0, nextBannerD: 3500,
-    nextShoutD: 2500, nextMotyaD: 4200,
+    nextShoutD: 2500, nextMotyaD: 4200, nextSupport: rand(25, 40), repairStreak: 0,
     event: null, eventT: 0, nextEvent: rand(22, 32),
     bubbleT: 0, lastSay: -9,
     over: false, overT: 0, paused: false,
@@ -445,6 +445,12 @@ function update(dt) {
   g.flash = Math.max(0, g.flash - dt);
   if (g.bubbleT > 0) { g.bubbleT -= dt; if (g.bubbleT <= 0) $('bubble').classList.add('hidden'); }
 
+  // Серёга по рации иногда подбадривает
+  if (!g.over) {
+    g.nextSupport -= dt;
+    if (g.nextSupport <= 0) { g.nextSupport = rand(35, 55); support('support', 1); }
+  }
+
   // события
   if (g.event) {
     g.eventT -= dt;
@@ -666,6 +672,7 @@ function collide(o) {
     case 'energy':
       o.hitDone = true; o.dead = true;
       g.energy = 5; sfx.energy(); talk(say('energy'), 'valera', 2, true);
+      if (Math.random() < 0.5) support('support', 2, 1600);
       break;
     case 'pothole':
     case 'puddle':
@@ -740,9 +747,15 @@ function collide(o) {
   }
 }
 
+function support(cat, prio, delay = 0) {
+  setTimeout(() => { if (g && !g.over && !g.paused) talk(say(cat), 'friend', prio, true); }, delay);
+}
+
 function damage(kind) {
   if (g.inv > 0 || g.energy > 0) return false;
   g.helmets--;
+  g.repairStreak = 0;
+  if (g.helmets > 0 && Math.random() < 0.4) support('supportHit', 2, 1900);
   g.hurt = 0.9; g.inv = 1.4; g.shake = 0.45;
   sfx.bump();
   if (kind) talk(say(kind), 'valera', 2, true);
@@ -766,7 +779,9 @@ function fix(o, auto) {
   float(x, y - 10 * S, '+' + pts, g.event === 'commission' ? '#ffcc00' : '#fff');
   burst(x, y, '#222', 10);
   sfx.repair();
-  if (o.type === 'puddle') talk(txt(PHRASES.repair[3]), 'valera', 1);
+  if (!auto) g.repairStreak++;
+  if (!auto && g.repairStreak % 4 === 0) support('support', 2, 500);
+  else if (o.type === 'puddle') talk(txt(PHRASES.repair[3]), 'valera', 1);
   else if (!auto && Math.random() < 0.3) talk(say('repair'), 'valera', 1);
 }
 
@@ -1167,6 +1182,7 @@ function finishGame() {
   if (km >= 5) unlock('km5');
   if (r.stage >= 3) unlock('stage4');
   if (r.motya >= 3) unlock('motya3');
+  if (save.shifts >= 10) unlock('shifts10');
   persist();
 
   const sat = r.repairs === 0 ? 0 : clamp(Math.round(100 * r.repairs / (r.repairs + r.holesHit * 2 + r.dodged * 0.5)), 0, 100);
@@ -1285,17 +1301,22 @@ function renderArchive() {
     const open = save.ach.includes(a.id);
     const el = document.createElement('div');
     el.className = 'ach' + (open ? '' : ' locked');
+    const poster = a.video.replace('.mp4', '.jpg');
     el.innerHTML = open
-      ? `<h3>🎬 ${a.clip}: «${a.title}»</h3><p>${a.desc} — выполнено ✅</p><button class="btn" type="button">▶ Смотреть</button>`
+      ? `<h3>🎬 ${a.clip}: «${a.title}»</h3>${a.caption ? `<div class="ach-thumb"><img src="${poster}" alt="" onerror="this.parentNode.remove()"><span>▶</span></div><p class="ach-cap">${a.caption}</p>` : ''}<p>${a.desc} — выполнено ✅</p><button class="btn" type="button">▶ Смотреть</button>`
       : `<h3>🔒 ${a.clip}</h3><p>Чтобы открыть: ${a.desc.toLowerCase()}</p>`;
-    if (open) el.querySelector('button').onclick = () => openVideo(a);
+    if (open) {
+      el.querySelector('button').onclick = () => openVideo(a);
+      const th = el.querySelector('.ach-thumb'); if (th) th.onclick = () => openVideo(a);
+    }
     box.appendChild(el);
   });
 }
 
 function openVideo(a) {
   const v = $('video');
-  $('videoTitle').textContent = `${a.clip}: «${a.title}»`;
+  $('videoTitle').textContent = `${a.clip}: «${a.caption || a.title}»`;
+  v.poster = a.video.replace('.mp4', '.jpg');
   $('videoMissing').innerHTML = '📼 Плёнка ещё в проявке. Скоро завезут!';
   $('videoMissing').classList.add('hidden');
   v.classList.remove('hidden');
