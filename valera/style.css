@@ -82,6 +82,7 @@ h1 span { color: var(--yellow); }
 .switch-ui { width: 50px; height: 28px; border-radius: 14px; background: #55555f; position: relative; flex-shrink: 0; transition: background .2s; }
 .switch-ui::after { content: ''; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; transition: left .2s; }
 .switch input:checked + .switch-ui { background: var(--red); }
+.switch input:checked + .switch-ui.subs { background: var(--green); }
 .switch input:checked + .switch-ui::after { left: 25px; }
 .switch-text { font-weight: 700; }
 .switch-text small { color: var(--muted); font-weight: 400; }
@@ -159,6 +160,7 @@ h1 span { color: var(--yellow); }
 .bubble.r-passer { border-color: #16a085; }
 .bubble.r-worker { border-color: #ff8a00; background: #fff8e1; }
 .bubble.r-friend { border-color: #2fbf71; background: #e8fff1; }
+.bubble.r-robot { border-color: #00bcd4; background: #e0f7fa; font-family: 'Courier New', Courier, monospace; }
 .speed-box { display: flex; align-items: center; gap: 6px; background: rgba(20,20,24,.6); border-radius: 10px; padding: 3px 10px 3px 4px; font-size: .85rem; font-weight: 800; }
 .speed-box .limit { width: 26px; height: 26px; border-radius: 50%; background: #fff; color: #111; border: 3px solid #d0021b; display: grid; place-items: center; font-size: .7rem; font-weight: 900; }
 .speed-box.over { background: rgba(208, 2, 27, .85); }

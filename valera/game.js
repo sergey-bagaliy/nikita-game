@@ -3,7 +3,7 @@
 /* ================= Настройки ================= */
 const KM = 10000;                 // столько «единиц пути» в одном километре
 const STORE = 'valera-roads-v1';
-const DEF = { career: 0, bank: 0, best: 0, bestKm: 0, bike: 'moped', owned: ['moped'], ach: [], geese: 0, shifts: 0, sound: true, voice: true, mat: false, tutorial: false };
+const DEF = { career: 0, bank: 0, best: 0, bestKm: 0, bike: 'moped', owned: ['moped'], ach: [], geese: 0, shifts: 0, sound: true, voice: true, mat: false, subs: true, tutorial: false };
 
 /* ================= Сохранение ================= */
 function load() {
@@ -184,7 +184,7 @@ function newGame() {
     zones: [], curZone: null, villageN: 0,
     objs: [], scenery: [], cracks: [], parts: [], floats: [],
     nextRowD: 600, nextSceneryD: [0, 0], nextCrackD: 0, nextBannerD: 3500,
-    nextShoutD: 2500, nextMotyaD: 4200, nextSupport: rand(25, 40), repairStreak: 0,
+    nextShoutD: 2500, nextMotyaD: 4200, nextSupport: rand(25, 40), repairStreak: 0, nextNav: rand(18, 30),
     event: null, eventT: 0, nextEvent: rand(22, 32),
     bubbleT: 0, lastSay: -9,
     over: false, overT: 0, paused: false,
@@ -433,7 +433,8 @@ function update(dt) {
       if (s.camera && kmh(v) > s.limit + 10) {
         g.fines += 100; g.flash = 0.35; sfx.flash();
         float(laneX(g.lx, g.dist), PY - 70 * S, '📷 −100 ₽', '#ff8b8b');
-        setTimeout(() => { if (g) talk(say('camera'), 'accountant', 3); }, 500);
+        talk(say('cameraBot'), 'camerabot', 3, true);
+        setTimeout(() => { if (g && !g.over) talk(say('camera'), 'accountant', 3, true); }, 4200);
       }
       if (s.kind === 'bump') {
         g.shake = 0.3; sfx.thump();
@@ -458,10 +459,12 @@ function update(dt) {
   g.flash = Math.max(0, g.flash - dt);
   if (g.bubbleT > 0) { g.bubbleT -= dt; if (g.bubbleT <= 0) $('bubble').classList.add('hidden'); }
 
-  // Серёга по рации иногда подбадривает
+  // Серёга по рации иногда подбадривает, навигатор «помогает»
   if (!g.over) {
     g.nextSupport -= dt;
     if (g.nextSupport <= 0) { g.nextSupport = rand(35, 55); support('support', 1); }
+    g.nextNav -= dt;
+    if (g.nextNav <= 0) { g.nextNav = rand(40, 65); talk(say('navigator'), 'navigator', 2); }
   }
 
   // события
@@ -851,6 +854,8 @@ function talk(text, roleId = 'valera', prio = 1, force = false) {
   if (!force && prio < 2 && g.t - g.lastSay < 1.2) return;
   g.lastSay = g.t;
   const role = ROLES[roleId] || ROLES.valera;
+  Voice.speak(text, roleId, prio);
+  if (!save.subs) return; // субтитры выключены — только голос
   const b = $('bubble');
   b.className = 'bubble ' + role.cls;
   b.innerHTML = '';
@@ -859,7 +864,6 @@ function talk(text, roleId = 'valera', prio = 1, force = false) {
   b.append(who, t);
   b.style.animation = 'none'; void b.offsetWidth; b.style.animation = '';
   g.bubbleT = Math.max(2.2, Math.min(4.5, text.length * 0.06));
-  Voice.speak(text, roleId, prio);
 }
 
 function announce(text) {
@@ -901,9 +905,16 @@ function pauseGame() {
   openDialog(`<h3>🚬 Перекур</h3>
     <p>Смена на паузе. Петрович не видит.</p>
     <button class="btn btn-go" id="resumeBtn" type="button">Работаем дальше</button>
+    <button class="btn" id="subsBtn" type="button">${save.subs ? '💬 Субтитры: вкл' : '💬 Субтитры: выкл'}</button>
     <button class="btn" id="quitBtn" type="button">Уйти со смены</button>`);
-  $('resumeBtn').onclick = resumeGame;
+  $('resumeBtn').onclick = () => { Voice.stop(); resumeGame(); };
+  $('subsBtn').onclick = () => {
+    save.subs = !save.subs; persist();
+    $('subsBtn').textContent = save.subs ? '💬 Субтитры: вкл' : '💬 Субтитры: выкл';
+    if (!save.subs) $('bubble').classList.add('hidden');
+  };
   $('quitBtn').onclick = () => { closeDialog(); Voice.stop(); g = null; renderMenu(); showScreen('menu'); };
+  if (Math.random() < 0.5) setTimeout(() => { if (g && g.paused) Voice.speak(say('autoresp'), 'autoresp', 3); }, 400);
 }
 function resumeGame() {
   closeDialog();
@@ -1282,6 +1293,7 @@ function renderMenu() {
   $('soundBtn').textContent = save.sound ? '🔊 Звук' : '🔇 Звук';
   $('voiceBtn').textContent = save.voice ? '🗣️ Голоса' : '🤐 Голоса';
   $('matToggle').checked = save.mat;
+  $('subsToggle').checked = save.subs;
   $('tip').textContent = pick(TIPS);
 }
 
@@ -1403,6 +1415,10 @@ $('voiceBtn').addEventListener('click', () => {
 Voice.uncensored = save.mat; persist(); renderMenu();
   if (save.voice) { Voice.warm(); Voice.speak(save.mat ? 'Голоса включены, бл*!' : 'Голоса включены!', 'valera', 3); }
   else Voice.stop();
+});
+$('subsToggle').addEventListener('change', e => {
+  save.subs = e.target.checked; persist();
+  $('tip').textContent = save.subs ? 'Субтитры включены: реплики видно на экране.' : 'Субтитры выключены: реплики только голосом.';
 });
 $('matToggle').addEventListener('change', e => {
   save.mat = e.target.checked; persist();
