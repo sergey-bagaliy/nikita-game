@@ -256,6 +256,13 @@ function renderHangar() {
       data.plane = p.id;
       saveData();
       renderMenu();
+
+// Офлайн-режим (работает только на сайте с https, при открытии файла с диска не нужен)
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => { /* без офлайна игра тоже работает */ });
+  });
+}
       sounds.ding();
       $('hangarHint').textContent = `Летим на самолёте «${p.name}»!`;
     });
@@ -284,6 +291,13 @@ function toggleNumber(n) {
   }
   saveData();
   renderMenu();
+
+// Офлайн-режим (работает только на сайте с https, при открытии файла с диска не нужен)
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => { /* без офлайна игра тоже работает */ });
+  });
+}
 }
 
 /* ================= Полёт (игра) ================= */
@@ -610,6 +624,13 @@ $('quitBtn').addEventListener('click', () => {
   stopTimers();
   game = null;
   renderMenu();
+
+// Офлайн-режим (работает только на сайте с https, при открытии файла с диска не нужен)
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => { /* без офлайна игра тоже работает */ });
+  });
+}
   showScreen('menu');
 });
 $('againBtn').addEventListener('click', e => startGame(e.currentTarget.dataset.mode || 'train'));
@@ -625,12 +646,33 @@ $('allBtn').addEventListener('click', () => {
   data.selected = NUMBERS.slice();
   saveData();
   renderMenu();
+
+// Офлайн-режим (работает только на сайте с https, при открытии файла с диска не нужен)
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => { /* без офлайна игра тоже работает */ });
+  });
+}
 });
 $('soundBtn').addEventListener('click', () => {
   data.sound = !data.sound;
   saveData();
   renderMenu();
+
+// Офлайн-режим (работает только на сайте с https, при открытии файла с диска не нужен)
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => { /* без офлайна игра тоже работает */ });
+  });
+}
   if (data.sound) sounds.chime();
 });
 
 renderMenu();
+
+// Офлайн-режим (работает только на сайте с https, при открытии файла с диска не нужен)
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => { /* без офлайна игра тоже работает */ });
+  });
+}

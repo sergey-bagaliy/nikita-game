@@ -1,0 +1,16 @@
+{
+  "name": "Лётная школа Никиты",
+  "short_name": "Лётная школа",
+  "description": "Тренажёр таблицы умножения",
+  "lang": "ru",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#bfe6ff",
+  "theme_color": "#6cbcff",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
