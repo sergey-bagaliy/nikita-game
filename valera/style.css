@@ -150,6 +150,7 @@ h1 span { color: var(--yellow); }
 .bubble.r-granny { border-color: #6c5ce7; background: #f1efff; }
 .bubble.r-passer { border-color: #16a085; }
 .bubble.r-worker { border-color: #ff8a00; background: #fff8e1; }
+.bubble.r-friend { border-color: #2fbf71; background: #e8fff1; }
 .speed-box { display: flex; align-items: center; gap: 6px; background: rgba(20,20,24,.6); border-radius: 10px; padding: 3px 10px 3px 4px; font-size: .85rem; font-weight: 800; }
 .speed-box .limit { width: 26px; height: 26px; border-radius: 50%; background: #fff; color: #111; border: 3px solid #d0021b; display: grid; place-items: center; font-size: .7rem; font-weight: 900; }
 .speed-box.over { background: rgba(208, 2, 27, .85); }
@@ -227,6 +228,10 @@ h1 span { color: var(--yellow); }
 .ach h3 { margin: 0 0 4px; font-size: 1.05rem; }
 .ach p { margin: 0; color: var(--muted); font-size: .9rem; }
 .ach.locked h3 { color: var(--muted); }
+.ach-thumb { position: relative; margin: 8px 0; border-radius: 12px; overflow: hidden; cursor: pointer; max-height: 220px; }
+.ach-thumb img { display: block; width: 100%; height: 220px; object-fit: cover; }
+.ach-thumb span { position: absolute; inset: 0; display: grid; place-items: center; font-size: 3rem; color: #fff; text-shadow: 0 2px 10px rgba(0,0,0,.6); background: rgba(0,0,0,.15); }
+.ach .ach-cap { color: var(--yellow); font-weight: 800; margin-bottom: 4px; }
 .ach .btn { margin: 10px 0 0; padding: 10px; font-size: .95rem; background: var(--red); box-shadow: 0 5px 0 #8f1418; }
 
 .modal { position: fixed; inset: 0; z-index: 10; background: rgba(0,0,0,.85); display: flex; align-items: center; justify-content: center; padding: 16px; }

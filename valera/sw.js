@@ -1,7 +1,7 @@
 'use strict';
 
 /* Офлайн-режим для «Ямщик». При изменении файлов поменяйте номер версии. */
-const CACHE = 'valera-yamy-v4';
+const CACHE = 'valera-yamy-v6';
 const FILES = ['./', 'index.html', 'style.css', 'data.js', 'voices.js', 'voice.js', 'art.js', 'game.js', 'valera-face.jpg', 'boss-face.jpg', 'dog-face.jpg', 'manifest.webmanifest', 'icon-180.png', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', event => {
