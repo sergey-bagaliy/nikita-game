@@ -94,7 +94,7 @@ STRESS = {
     'родная': 2, 'роспись': 1, 'сраные': 1, 'съебись': 2, 'трасса': 1, 'трассы': 1, 'трогай': 1,
     'управление': 3, 'чмошник': 1, 'шаурма': 3, 'толкача': 3, 'мотя': 1, 'валера': 2,
     'красноармейка': 4, 'красноармейки': 4, 'тебе': 2,
-    'ведра': 2, 'глаза': 2, 'душа': 2, 'стеклотара': 4, 'таурин': 3, 'технадзор': 3, 'ходу': 2, 'цвета': 2,
+    'ведра': 2, 'глаза': 2, 'душа': 2, 'стеклотара': 3, 'таурин': 3, 'технадзор': 3, 'ходу': 2, 'цвета': 2,
     'шаурмой': 3, 'шаурму': 3, 'шаурмы': 3, 'шумахером': 2, 'ебучих': 2,
 }
 
@@ -303,7 +303,8 @@ def main():
         base = role.split(':', 1)[1] if phone else role
         model, length, noise, pitch, fx = VOICES.get(base, VOICES['valera'])
         key = role + '|' + ln['text']
-        sig = repr((VOICES.get(base), phone, 3))
+        words = re.findall(r'[а-яё]+', clean_text(ln['text']).lower())
+        sig = repr((VOICES.get(base), phone, 3, sorted((w, STRESS[w]) for w in set(words) if w in STRESS)))
         name = hashlib.md5(('neural|' + key + sig).encode('utf-8')).hexdigest()[:10] + '.mp3'
         path = os.path.join(OUT_DIR, name)
         if not os.path.exists(path):
