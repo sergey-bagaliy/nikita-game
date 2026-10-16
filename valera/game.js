@@ -137,11 +137,12 @@ function resize() {
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  roadW = Math.min(W * 0.66, 420);
+  const narrow = W < 600;
+  roadW = narrow ? W * 0.58 : Math.min(W * 0.66, 420);
   laneW = roadW / 3;
   S = laneW / 86;
   PY = H * 0.8;
-  AMP = clamp((W - roadW) / 2 - 14 * S, 0, 240);
+  AMP = clamp((W - roadW) / 2 - 14 * S, 0, 240) * (narrow ? 0.45 : 1);
   for (const k of Object.keys(ZONES)) roadPatterns[k] = makeRoadPattern(ZONES[k].road);
 }
 window.addEventListener('resize', () => { if ($('game').classList.contains('active')) resize(); });
@@ -201,7 +202,7 @@ function ensureZones(dMax) {
     if (last.type !== 'highway') { type = 'highway'; len = rand(2600, 4000); name = 'Трасса'; }
     else {
       g.villageN++;
-      type = g.villageN % 3 === 0 ? 'town' : 'village';
+      type = g.villageN % 2 === 0 ? 'town' : 'village';
       len = type === 'town' ? rand(3200, 4200) : rand(2200, 3000);
       name = pick(type === 'town' ? TOWNS : VILLAGES);
     }
@@ -218,6 +219,7 @@ function addFix(kind, d, side, off, extra = {}) {
 function addZoneFixtures(z) {
   const Z = ZONES[z.type];
   if (z.type !== 'highway') {
+    g.scenery.push({ kind: 'arch', d: z.start + 60, road: true, text: (z.type === 'town' ? 'ДОБРО ПОЖАЛОВАТЬ: ' : 'СТ. ') + z.name.toUpperCase(), town: z.type === 'town' });
     addFix('sign', z.start + 30, 1, 14, { sign: 'city', val: z.name });
     addFix('sign', z.start + 160, 1, 14, { sign: 'limit', val: Z.limit });
     addFix('sign', z.end - 30, 1, 14, { sign: 'cityEnd', val: z.name });
@@ -226,9 +228,12 @@ function addZoneFixtures(z) {
       const bd = rand(z.start + 700, z.end - 600);
       addFix('sign', bd - 140, 1, 14, { sign: 'bump' });
       g.scenery.push({ kind: 'bump', d: bd, road: true });
+      const zd = rand(z.start + 450, z.start + 650);
+      addFix('sign', zd - 150, 1, 14, { sign: 'crossing' });
+      g.scenery.push({ kind: 'zebra', d: zd, road: true, spawned: false });
     } else {
-      for (let i = 0; i < 2; i++) {
-        const zd = rand(z.start + 600 + i * 1400, z.start + 1400 + i * 1400);
+      for (let i = 0; i < 3; i++) {
+        const zd = rand(z.start + 450 + i * 1000, z.start + 1000 + i * 1000);
         if (zd > z.end - 400) continue;
         addFix('sign', zd - 150, 1, 14, { sign: 'crossing' });
         g.scenery.push({ kind: 'zebra', d: zd, road: true, spawned: false });
@@ -247,9 +252,13 @@ function addZoneFixtures(z) {
   }
 }
 
+// Сколько места от края дороги до края экрана (в единицах), чтобы дома не уезжали за экран
+function sideRoom() { return Math.max(40, ((W - roadW) / 2 - AMP) / S); }
+
 function spawnScenery(side, d) {
   const z = zoneAt(d).type;
   const r = Math.random();
+  const room = sideRoom();
   let gap = 60;
   if (z === 'highway') {
     if (r < 0.45) { addFix('tree', d, side, rand(30, 70), { tree: Math.random() < 0.6 ? 'poplar' : 'tree' }); gap = rand(28, 60); }
@@ -260,15 +269,16 @@ function spawnScenery(side, d) {
     if (r < 0.55) {
       const roofs = [['#b5482f', '#933a26'], ['#4c7a3c', '#3c6230'], ['#5b6b7f', '#4a5868'], ['#7a4b2a', '#613b21']];
       const [roof, roof2] = pick(roofs);
-      addFix('house', d, side, rand(62, 74), { w: rand(42, 56) * S, h: rand(34, 44) * S, roof, roof2, wall: '#efe6d2', fence: pick(['#6d4c2f', '#2e7d32', '#1565c0']) });
-      gap = rand(120, 160);
+      const hw = Math.min(rand(42, 56), room * 0.75);
+      addFix('house', d, side, Math.min(rand(62, 74), 16 + hw * 0.8), { w: hw * S, h: hw * 0.8 * S, roof, roof2, wall: pick(['#efe6d2', '#f6e7c1', '#e8eef5', '#f3d9d0']), fence: pick(['#6d4c2f', '#2e7d32', '#1565c0']) });
+      gap = rand(95, 130);
     } else if (r < 0.7) { addFix('tree', d, side, rand(26, 46), { tree: 'fruit' }); gap = rand(40, 70); }
     else if (r < 0.8) { addFix('well', d, side, 30); gap = rand(50, 80); }
     else if (r < 0.9) { addFix('pole', d, side, 22); gap = rand(50, 80); }
     else { addFix('car', d, side, 22, { color: pick(['#c0392b', '#ecf0f1', '#2c3e50', '#7f8c8d', '#27ae60']) }); gap = rand(60, 90); }
   } else {
-    if (r < 0.4) { addFix('block', d, side, rand(80, 96), { w: rand(70, 100) * S, h: rand(120, 170) * S }); gap = rand(190, 240); }
-    else if (r < 0.7) { addFix('shop', d, side, 60, { w: 44 * S, h: rand(60, 80) * S, text: pick(SHOPS), color: pick(['#c0392b', '#2471a3', '#27ae60', '#d35400', '#8e44ad']) }); gap = rand(110, 140); }
+    if (r < 0.4) { const bw = Math.min(rand(70, 100), room * 1.1); addFix('block', d, side, Math.min(rand(80, 96), 34 + bw * 0.5), { w: bw * S, h: rand(120, 170) * S }); gap = rand(190, 240); }
+    else if (r < 0.7) { addFix('shop', d, side, Math.min(60, 36 + 22), { w: 44 * S, h: rand(60, 80) * S, text: pick(SHOPS), color: pick(['#c0392b', '#2471a3', '#27ae60', '#d35400', '#8e44ad']) }); gap = rand(110, 140); }
     else if (r < 0.85) { addFix('car', d, side, 20, { color: pick(['#c0392b', '#ecf0f1', '#2c3e50', '#7f8c8d', '#f1c40f']) }); gap = rand(55, 80); }
     else { addFix('tree', d, side, 40, { tree: 'tree' }); gap = rand(50, 80); }
     if (Math.random() < 0.35) addFix('lamp', d + 20, side, 36);
@@ -355,7 +365,10 @@ function update(dt) {
   if (cz !== g.curZone) {
     const first = !g.curZone;
     g.curZone = cz;
-    if (!first && Math.random() < 0.6) talk(txt(pick(ZONE_LINES[cz.type])), 'valera', 1);
+    if (!first) {
+      announce(cz.type === 'highway' ? '🛣️ Выезд на трассу' : (cz.type === 'town' ? '🏙️ Въезд в город: ' : '🏡 Въезд в станицу: ') + (cz.type === 'highway' ? '' : cz.name));
+      if (Math.random() < 0.6) setTimeout(() => { if (g) talk(txt(pick(ZONE_LINES[cz.type])), 'valera', 1); }, 1200);
+    }
   }
 
   if (!g.over) {
@@ -411,7 +424,7 @@ function update(dt) {
   for (const s of g.scenery) {
     if (s.kind === 'zebra' && !s.spawned && s.d < ahead) {
       s.spawned = true;
-      if (Math.random() < 0.7) {
+      if (Math.random() < 0.85) {
         const fromLeft = Math.random() < 0.5;
         g.objs.push(makeObj('passer', fromLeft ? -0.6 : 3.6, s.d, { vx: (fromLeft ? 1 : -1) * rand(0.45, 0.65), look: { shirt: pick(['#16a085', '#e67e22', '#2980b9', '#c0392b']), hat: pick(['cap', 'none', 'scarf']) } }));
       }
@@ -849,6 +862,16 @@ function talk(text, roleId = 'valera', prio = 1, force = false) {
   Voice.speak(text, roleId, prio);
 }
 
+function announce(text) {
+  const el = $('zoneBanner');
+  el.textContent = text;
+  el.classList.remove('hidden');
+  el.style.animation = 'none'; void el.offsetWidth; el.style.animation = '';
+  clearTimeout(announce.t);
+  announce.t = setTimeout(() => el.classList.add('hidden'), 2600);
+  sfx.event();
+}
+
 function startEvent() {
   const ev = pick(['commission', 'rain', 'herd']);
   g.event = ev;
@@ -1124,7 +1147,13 @@ function draw() {
   }
 
   // растяжки над дорогой
-  for (const s of g.scenery) if (s.kind === 'banner') { const L = roadL(s.d); drawBanner(ctx, L - 6 * S, L + roadW + 6 * S, yOf(s.d), S, s.text); }
+  for (const s of g.scenery) {
+    if (s.kind !== 'banner' && s.kind !== 'arch') continue;
+    const y = yOf(s.d); if (y < -60 || y > H + 60) continue;
+    const L = roadL(s.d);
+    if (s.kind === 'arch') drawArch(ctx, L - 16 * S, L + roadW + 16 * S, y, S, s.text, s.town);
+    else drawBanner(ctx, L - 6 * S, L + roadW + 6 * S, y, S, s.text);
+  }
 
   for (const p of g.parts) { ctx.fillStyle = p.color; ctx.fillRect(p.x, p.y, p.r, p.r); }
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
