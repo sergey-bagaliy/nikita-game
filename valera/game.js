@@ -22,7 +22,21 @@ const pick = arr => arr[Math.floor(Math.random() * arr.length)];
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
 const txt = pair => pair[save.mat ? 1 : 0];
-const say = key => txt(pick(PHRASES[key]));
+// Фразы идут «колодой»: пока не прозвучат все из набора, одна и та же не повторится
+const phraseBags = {};
+function say(key) {
+  const list = PHRASES[key];
+  let bag = phraseBags[key];
+  if (!bag || !bag.length) {
+    const last = bag && bag.last;
+    bag = shuffle(list.map((_, i) => i));
+    if (bag.length > 1 && bag[bag.length - 1] === last) [bag[0], bag[bag.length - 1]] = [bag[bag.length - 1], bag[0]];
+    phraseBags[key] = bag;
+  }
+  const i = bag.pop();
+  bag.last = i;
+  return txt(list[i]);
+}
 const bikeById = id => BIKES.find(b => b.id === id) || BIKES[0];
 function careerIndex(xp) {
   let i = 0;
@@ -179,7 +193,7 @@ function newGame() {
     bike, t: 0, dist: 0, bonus: 0, coins: 0, fines: 0,
     repairs: 0, holesHit: 0, dodged: 0, cones: 0, animals: 0, grannies: 0, shawarma: 0, motya: 0,
     helmets: bike.helmets, asphalt: 1,
-    stage: 0, lane: 1, lx: 1.5, lean: 0,
+    stage: 0, lane: 1, lx: 1.5, lean: 0, wheelie: 0, wheelieCd: 0,
     hurt: 0, inv: 0, energy: 0, goose: 0, headTilt: 0, shake: 0, splash: 0, splashBlobs: [], flash: 0,
     zones: [], curZone: null, villageN: 0,
     objs: [], scenery: [], cracks: [], parts: [], floats: [],
@@ -436,7 +450,7 @@ function update(dt) {
         talk(say('cameraBot'), 'camerabot', 3, true);
         setTimeout(() => { if (g && !g.over) talk(say('camera'), 'accountant', 3, true); }, 4200);
       }
-      if (s.kind === 'bump') {
+      if (s.kind === 'bump' && g.wheelie <= 0) {
         g.shake = 0.3; sfx.thump();
         if (Math.random() < 0.5) talk(say('bump'), 'valera', 1);
       }
@@ -447,7 +461,11 @@ function update(dt) {
   const tx = g.lane + 0.5;
   const diff = tx - g.lx;
   g.lx += diff * Math.min(1, dt * g.bike.lane);
-  g.lean = clamp(diff * 2.5, -1, 1);
+  // плавный наклон в сторону перестроения
+  g.lean += (clamp(diff * 3, -1, 1) - g.lean) * Math.min(1, dt * 9);
+  g.wheelie = Math.max(0, g.wheelie - dt);
+  g.wheelieCd = Math.max(0, g.wheelieCd - dt);
+  if (g.wheelie > 0) g.bonus += dt * 15;
   g.headTilt = g.hurt > 0 ? Math.sin(g.t * 40) * 0.35 * g.hurt : Math.sin(g.t * 3) * 0.06;
 
   g.hurt = Math.max(0, g.hurt - dt);
@@ -672,12 +690,19 @@ function collide(o) {
   switch (o.type) {
     case 'bucket':
       o.hitDone = true; o.dead = true;
-      if (g.asphalt < g.bike.asphalt) { g.asphalt++; float(x, y, '+🪣'); } else { g.bonus += 20; float(x, PY - 60 * S, 'Склад полон +20'); }
+      if (g.asphalt < g.bike.asphalt) {
+        g.asphalt++; float(x, y, '+🪣');
+        if (Math.random() < 0.45) talk(say('bucket'), 'valera', 1);
+      } else {
+        g.bonus += 20; float(x, PY - 60 * S, 'Склад полон +20');
+        if (Math.random() < 0.6) talk(say('bucketFull'), 'valera', 1);
+      }
       sfx.bucket();
       break;
     case 'coin':
       o.hitDone = true; o.dead = true;
       g.coins++; sfx.coin();
+      if (Math.random() < 0.1) talk(say('coin'), 'valera', 1);
       float(x, PY - 50 * S, '+10 ₽', '#ffcc00');
       break;
     case 'shawarma':
@@ -694,6 +719,7 @@ function collide(o) {
     case 'puddle':
       if (g.bike.special === 'roller') { fix(o, true); break; }
       o.hitDone = true;
+      if (g.wheelie > 0) { g.bonus += 20; float(x, y, 'Проскочил! +20', '#7CFC00'); g.dodged++; break; }
       if (o.type === 'puddle') {
         g.splash = 1.8; g.splashBlobs = makeSplash();
         if (!o.hidden) { talk(say('splash'), 'valera', 1); noise(0, 0.3, { freq: 1200, filter: 'bandpass', vol: 0.4 }); break; }
@@ -744,6 +770,7 @@ function collide(o) {
       break;
     case 'glass':
       o.hitDone = true;
+      if (g.wheelie > 0) { float(x, y, 'Проскочил!', '#7CFC00'); break; }
       damage('glass');
       break;
     case 'roller':
@@ -831,6 +858,15 @@ function nearestAhead() {
     if (o.d > g.dist + 10 && yOf(o.d) > 0 && (!best || o.d < best.d)) best = o;
   }
   return best;
+}
+
+function wheelie() {
+  if (!g || g.paused || g.over || g.wheelie > 0 || g.wheelieCd > 0) return;
+  g.wheelie = 1.5; g.wheelieCd = 4.5;
+  tone(90, 0, 0.6, { type: 'sawtooth', to: 260, vol: 0.12 });
+  float(laneX(g.lx, g.dist), PY - 80 * S, 'ЦАПА!', '#ffcc00');
+  if (Math.random() < 0.6) talk(say('wheelie'), 'valera', 2, true);
+  else support('support', 2, 300);
 }
 
 function move(dir) {
@@ -945,6 +981,7 @@ const HOWTO = `<h3>Как работать</h3>
   <ul>
     <li>⬅️➡️ <b>Ткни пальцем в левую или правую половину экрана</b> — перестроиться. На компьютере — стрелки ← →.</li>
     <li>🕳️ <b>Ткни пальцем прямо в яму</b> — заделать её. Нужно ведро асфальта 🪣. На компьютере — кликни мышкой по яме или нажми пробел.</li>
+    <li>🏍️ <b>Кнопка «ЦАПА» справа внизу</b> — встать на заднее колесо: ямы, лужи и стекло проскакиваешь. На компьютере — ↓ или Shift.</li>
     <li>⛑️ Яма, корова, собака, бабушка, стекло, каток и Мотя — минус шлем. Шлемы кончились — смена окончена.</li>
     <li>🦆 Гусь путает лево и право. 🐈‍⬛ Кошка крадёт ведро. 🌯 Шаурма лечит. ⚡ Энергетик — неуязвимость.</li>
     <li>📷 В городе камеры: быстро едешь — штраф. 🍾 Увидел клуб — жди Мотю с бутылками.</li>
@@ -968,7 +1005,7 @@ function showHowTo(inGame) {
 /* ---------- HUD ---------- */
 let hudCache = {};
 function setText(id, value) { if (hudCache[id] !== value) { hudCache[id] = value; $(id).textContent = value; } }
-function score() { return Math.max(0, Math.floor(g.dist / 10) + g.bonus); }
+function score() { return Math.max(0, Math.floor(g.dist / 10 + g.bonus)); }
 function updateHud(reset) {
   if (reset) hudCache = {};
   setText('hHelmets', '⛑️ ' + Math.max(0, g.helmets));
@@ -987,6 +1024,9 @@ function updateHud(reset) {
   if (g.goose > 0) badges.push(`<span class="badge">🦆 ГУСЬ У РУЛЯ ${Math.ceil(g.goose)}</span>`);
   if (g.energy > 0) badges.push(`<span class="badge energy">⚡ НЕУЯЗВИМ ${Math.ceil(g.energy)}</span>`);
   if (g.event) badges.push(`<span class="badge">${{ commission: '🕴️', rain: '🌧️', herd: '🐾' }[g.event]} ${Math.ceil(g.eventT)} с</span>`);
+  const wb = $('wheelieBtn');
+  wb.classList.toggle('cool', g.wheelieCd > 0 && g.wheelie <= 0);
+  wb.classList.toggle('on', g.wheelie > 0);
   const html = badges.join('');
   if (hudCache.badges !== html) { hudCache.badges = html; $('badges').innerHTML = html; }
 }
@@ -1144,7 +1184,8 @@ function draw() {
   if (!blink || g.over) {
     ctx.save();
     if (g.over) { ctx.translate(px, PY); ctx.rotate(g.overT * 6); ctx.translate(-px, -PY); }
-    drawPlayer(ctx, px, PY, S, g.bike, g.t, { lean: g.lean, headTilt: g.headTilt, hurt: g.hurt, angle: roadAngle(g.dist) });
+    const wh = g.wheelie > 0 ? Math.min(1, Math.min(g.wheelie, 1.5 - g.wheelie) * 5) : 0;
+    drawPlayer(ctx, px, PY, S, g.bike, g.t, { lean: g.lean, headTilt: g.headTilt, hurt: g.hurt, angle: roadAngle(g.dist), wheelie: wh });
     ctx.restore();
   }
 
@@ -1202,7 +1243,7 @@ function finishGame() {
   const r = g;
   g = null;
   const km = r.dist / KM;
-  const pts = Math.max(0, Math.floor(r.dist / 10) + r.bonus);
+  const pts = Math.max(0, Math.floor(r.dist / 10 + r.bonus));
   const money = Math.max(0, r.coins * 10 - r.fines);
   const rankBefore = careerIndex(save.career);
   save.career += pts;
@@ -1390,6 +1431,7 @@ document.addEventListener('keydown', e => {
   if (g.paused) { if (e.key === 'Enter' || e.key === ' ') { const b = $('dialog').querySelector('.btn-go'); if (b) b.click(); e.preventDefault(); } return; }
   if (['ArrowLeft', 'a', 'A', 'ф', 'Ф'].includes(e.key)) { move(-1); e.preventDefault(); }
   if (['ArrowRight', 'd', 'D', 'в', 'В'].includes(e.key)) { move(1); e.preventDefault(); }
+  if (['ArrowDown', 'Shift', 's', 'S', 'ы', 'Ы'].includes(e.key)) { wheelie(); e.preventDefault(); return; }
   if ([' ', 'ArrowUp', 'w', 'W', 'ц', 'Ц'].includes(e.key)) {
     e.preventDefault();
     const o = nearestAhead();
@@ -1400,6 +1442,7 @@ document.addEventListener('keydown', e => {
 document.addEventListener('visibilitychange', () => { if (document.hidden) pauseGame(); });
 
 $('pauseBtn').addEventListener('click', pauseGame);
+$('wheelieBtn').addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); Voice.warm(); wheelie(); });
 $('playBtn').addEventListener('click', startGame);
 $('againBtn').addEventListener('click', startGame);
 $('garageBtn').addEventListener('click', () => { renderGarage(); showScreen('garage'); });
