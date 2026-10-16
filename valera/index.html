@@ -47,9 +47,10 @@
         <button id="garageBtn" class="btn" type="button">🔧 Гараж</button>
         <button id="archiveBtn" class="btn" type="button">🎬 Компромат</button>
       </div>
-      <div class="btn-row">
+      <div class="btn-row three">
         <button id="howBtn" class="btn btn-small" type="button">❓ Как играть</button>
         <button id="soundBtn" class="btn btn-small" type="button">🔊 Звук</button>
+        <button id="voiceBtn" class="btn btn-small" type="button">🗣️ Голоса</button>
       </div>
       <label class="switch">
         <input type="checkbox" id="matToggle">
@@ -74,6 +75,10 @@
       <div class="hud-row small">
         <div class="hud-stage" id="hStage">Этап 1: Двор</div>
         <div class="hud-km" id="hKm">0.00 км</div>
+      </div>
+      <div class="hud-row small">
+        <div class="hud-stage" id="hZone">🛣️ Трасса</div>
+        <div class="speed-box" id="hSpeedBox"><span class="limit" id="hLimit">90</span><span id="hSpeed">0 км/ч</span></div>
       </div>
       <div class="badges" id="badges"></div>
       <div class="event hidden" id="eventBanner"></div>
@@ -146,6 +151,7 @@
   </div>
 
   <script src="data.js"></script>
+  <script src="voice.js"></script>
   <script src="art.js"></script>
   <script src="game.js"></script>
 </body>
