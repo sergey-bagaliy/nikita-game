@@ -36,21 +36,30 @@ const pick = arr => arr[Math.floor(Math.random() * arr.length)];
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
 const txt = pair => pair[save.mat ? 1 : 0];
-// Фразы идут «колодой»: пока не прозвучат все из набора, одна и та же не повторится
-const phraseBags = {};
-function say(key) {
-  const list = PHRASES[key];
-  let bag = phraseBags[key];
-  if (!bag || !bag.length) {
-    const last = bag && bag.last;
-    bag = shuffle(list.map((_, i) => i));
-    if (bag.length > 1 && bag[bag.length - 1] === last) [bag[0], bag[bag.length - 1]] = [bag[bag.length - 1], bag[0]];
-    phraseBags[key] = bag;
-  }
-  const i = bag.pop();
-  bag.last = i;
-  return txt(list[i]);
+// Фразы идут «колодой»: пока не прозвучат все из набора, одна и та же не повторится.
+// Колоды запоминаются в телефоне — новая смена продолжает перемешанную колоду, а не начинает с начала.
+const DECKS = 'valera-decks-v1';
+const decks = (() => { try { return JSON.parse(localStorage.getItem(DECKS)) || {}; } catch (e) { return {}; } })();
+let decksTimer = 0;
+function saveDecks() {
+  clearTimeout(decksTimer); decksTimer = 0;
+  try { localStorage.setItem(DECKS, JSON.stringify(decks)); } catch (e) { /* без памяти тоже перемешиваем */ }
 }
+window.addEventListener('pagehide', saveDecks);
+function fromDeck(key, list) {
+  let d = decks[key];
+  // набор фраз поменялся (добавили новые) — тасуем заново
+  if (!d || d.n !== list.length || !Array.isArray(d.left) || d.left.some(i => !(i >= 0 && i < list.length))) d = decks[key] = { n: list.length, left: [], last: -1 };
+  if (!d.left.length) {
+    d.left = shuffle(list.map((_, i) => i));
+    // чтобы на стыке колод одна фраза не прозвучала два раза подряд
+    if (d.left.length > 1 && d.left[d.left.length - 1] === d.last) [d.left[0], d.left[d.left.length - 1]] = [d.left[d.left.length - 1], d.left[0]];
+  }
+  d.last = d.left.pop();
+  if (!decksTimer) decksTimer = setTimeout(saveDecks, 2000);
+  return list[d.last];
+}
+const say = key => txt(fromDeck(key, PHRASES[key]));
 const bikeById = id => BIKES.find(b => b.id === id) || BIKES[0];
 function careerIndex(xp) {
   let i = 0;
@@ -173,7 +182,8 @@ function makeRoadPattern(color) {
 // энергосбережения и сам держит 30 кадров) — возвращаем как было и больше не трогаем.
 const QUALITY = [{ slice: 8, dpr: 2 }, { slice: 12, dpr: 1.5 }, { slice: 16, dpr: 1 }, { slice: 16, dpr: 0.75 }];
 const quality = { level: 0, prev: 0, slice: 8, acc: 0, n: 0, base: 0, check: false, locked: false };
-const levelDpr = i => Math.min(QUALITY[i].dpr, window.devicePixelRatio || 1);
+const PIXEL_BUDGET = 2.3e6;
+const levelDpr = i => Math.min(QUALITY[i].dpr, window.devicePixelRatio || 1, Math.sqrt(PIXEL_BUDGET / Math.max(1, W * H)));
 function watchFps(ms) {
   if (ms > 250 || g.t < 3 || quality.locked) return; // вкладка была скрыта или смена только началась
   quality.acc += ms; quality.n++;
@@ -198,7 +208,8 @@ function resize() {
   W = cv.clientWidth; H = cv.clientHeight;
   const q = QUALITY[quality.level];
   quality.slice = q.slice;
-  const dpr = Math.min(q.dpr, window.devicePixelRatio || 1);
+  // большой монитор или ретина: не больше ~2,3 млн точек на кадр — иначе даже мощный ПК подтормаживает
+  const dpr = Math.min(q.dpr, window.devicePixelRatio || 1, Math.sqrt(PIXEL_BUDGET / Math.max(1, W * H)));
   cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   const narrow = W < 600;
@@ -459,7 +470,7 @@ function update(dt) {
     g.curZone = cz;
     if (!first) {
       announce(cz.type === 'highway' ? '🛣️ Выезд на трассу' : (cz.type === 'town' ? '🏙️ Въезд в город: ' : '🏡 Въезд в станицу: ') + (cz.type === 'highway' ? '' : cz.name));
-      if (Math.random() < 0.6) later(1.2, () => talk(txt(pick(ZONE_LINES[cz.type])), 'valera', 1));
+      if (Math.random() < 0.6) later(1.2, () => talk(txt(fromDeck('zone:' + cz.type, ZONE_LINES[cz.type])), 'valera', 1));
     }
   }
 
@@ -476,7 +487,7 @@ function update(dt) {
       g.nextCrackD += rand(80, 200);
     }
     if (g.nextBannerD < ahead) {
-      g.scenery.push({ kind: 'banner', d: g.nextBannerD, road: true, text: pick(BANNERS) });
+      g.scenery.push({ kind: 'banner', d: g.nextBannerD, road: true, text: fromDeck('banner', BANNERS) });
       g.nextBannerD += rand(9000, 14000);
     }
     if (g.nextShoutD < ahead) { spawnShouter(g.nextShoutD); g.nextShoutD += rand(3500, 6000); }
@@ -677,7 +688,7 @@ function spawnShouter(d) {
   const side = Math.random() < 0.5 ? -1 : 1;
   g.objs.push(makeObj('shouter', side < 0 ? -1.7 : 4.7, d, {
     actor: true, noHit: true, side, look: sh.look, target: side < 0 ? -0.5 : 3.5,
-    line: { text: txt(pick(sh.lines)), role: sh.role, prio: 2 },
+    line: { text: txt(fromDeck('shout:' + SHOUTERS.indexOf(sh), sh.lines)), role: sh.role, prio: 2 },
   }));
 }
 
@@ -1067,13 +1078,19 @@ function resumeGame() {
   kick();
 }
 
+const CALLERS = {
+  accountant: 'Людмила Петровна, бухгалтерия', director: 'Директор ООО «Красноармейка»', deputy: 'Депутат райсовета',
+  tax: 'Налоговая инспекция', tehnadzor: 'Технадзор заказчика', snab: 'Снабжение', nachuch: 'Начальник участка',
+  laborant: 'Лаборатория', engineer: 'Инженер ПТО',
+};
 function bossCall(stage) {
   g.paused = true;
   engineStop();
   sfx.ring();
   const st = STAGES[stage];
-  const [roleId, pair] = BOSS_CALLS[Math.min(stage - 1, BOSS_CALLS.length - 1)];
-  const caller = roleId === 'accountant' ? 'Людмила Петровна, бухгалтерия' : CAREER[careerIndex(save.career)].caller;
+  // звонки вразнобой: каждый раз новый, пока не переберём все
+  const [roleId, pair] = fromDeck('boss', BOSS_CALLS);
+  const caller = roleId === 'chief' ? CAREER[careerIndex(save.career)].caller : CALLERS[roleId] || ROLES[roleId].name;
   const text = txt(pair);
   openDialog(`<div class="phone">📞</div>
     <div class="caller">Входящий: <b>${caller}</b></div>
@@ -1448,7 +1465,7 @@ function finishGame() {
   const promo = $('promo');
   if (rankAfter > rankBefore) {
     const c = CAREER[rankAfter];
-    promo.innerHTML = `<div class="promo-icon">${c.icon}</div><div>📈 ${txt(pick(PROMO))}</div><div class="promo-rank">Новая должность: <b>${c.name}</b></div>`;
+    promo.innerHTML = `<div class="promo-icon">${c.icon}</div><div>📈 ${txt(fromDeck('promo', PROMO))}</div><div class="promo-rank">Новая должность: <b>${c.name}</b></div>`;
     promo.classList.remove('hidden');
   } else promo.classList.add('hidden');
   const u = $('unlocks');
@@ -1482,7 +1499,7 @@ function renderMenu() {
   $('voiceBtn').textContent = save.voice ? '🗣️ Голоса' : '🤐 Голоса';
   $('matToggle').checked = save.mat;
   $('subsToggle').checked = save.subs;
-  $('tip').textContent = pick(TIPS);
+  $('tip').textContent = fromDeck('tips', TIPS);
 }
 
 function renderGarage() {
