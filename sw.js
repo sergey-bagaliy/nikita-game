@@ -3,7 +3,7 @@
 /* Офлайн-режим: после первого открытия игра хранится в телефоне и запускается без интернета.
    Если есть интернет, файлы тихо обновляются, и новая версия появится при следующем запуске.
    При изменении файлов игры поменяйте номер версии CACHE. */
-const CACHE = 'letnaya-shkola-v2';
+const CACHE = 'letnaya-shkola-v3';
 const FILES = [
   './',
   'index.html',
@@ -11,6 +11,7 @@ const FILES = [
   'planes.js',
   'boss.js',
   'game.js',
+  'arcade.js',
   'manifest.webmanifest',
   'icon-180.png',
   'icon-192.png',

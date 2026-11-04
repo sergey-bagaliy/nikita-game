@@ -46,6 +46,7 @@
           </div>
         </div>
         <div class="progress"><div id="levelBar"></div></div>
+        <div class="exams" id="examList" aria-label="Экзамены по числам"></div>
         <div class="stats">
           <div><b id="statStars">0</b><span>⭐ звёзд</span></div>
           <div><b id="statPoints">0</b><span>очков</span></div>
@@ -90,6 +91,21 @@
           <span class="mode-desc" id="mistakesDesc">Повтори трудные примеры</span>
         </button>
       </div>
+
+      <div class="card add-card">
+        <h2>➕ Сложение до 1000</h2>
+        <div class="add-levels">
+          <button class="add-btn" data-add="two" type="button"><b>Двузначные</b><span>45 + 38</span></button>
+          <button class="add-btn" data-add="three" type="button"><b>Трёхзначные</b><span>275 + 986</span></button>
+          <button class="add-btn" data-add="mix" type="button"><b>Вперемешку</b><span>347 + 58</span></button>
+        </div>
+        <p class="hint">Ответ набираешь сам, как на калькуляторе. 10 примеров за полёт</p>
+      </div>
+
+      <button id="arcadeBtn" class="wide-btn arcade-btn" type="button">
+        <span class="wide-icon">🎮</span>
+        <span><b>Аэродром: мини-игры</b><span id="arcadeDesc">Билеты за правильные ответы</span></span>
+      </button>
 
       <button id="progressBtn" class="wide-btn" type="button">
         <span class="wide-icon">📊</span>
@@ -162,6 +178,21 @@
         <button class="answer" type="button"></button>
       </div>
 
+      <div class="keypad hidden" id="keypad">
+        <button class="kp" data-k="1" type="button">1</button>
+        <button class="kp" data-k="2" type="button">2</button>
+        <button class="kp" data-k="3" type="button">3</button>
+        <button class="kp" data-k="4" type="button">4</button>
+        <button class="kp" data-k="5" type="button">5</button>
+        <button class="kp" data-k="6" type="button">6</button>
+        <button class="kp" data-k="7" type="button">7</button>
+        <button class="kp" data-k="8" type="button">8</button>
+        <button class="kp" data-k="9" type="button">9</button>
+        <button class="kp kp-del" data-k="del" type="button" aria-label="Стереть">⌫</button>
+        <button class="kp" data-k="0" type="button">0</button>
+        <button class="kp kp-ok" data-k="ok" type="button" aria-label="Проверить">✓</button>
+      </div>
+
       <div class="explain hidden" id="explain">
         <div class="explain-title" id="explainTitle"></div>
         <div class="explain-sum" id="explainSum"></div>
@@ -184,11 +215,18 @@
         <div class="banner record hidden" id="resRecord"></div>
         <div class="banner daily-done hidden" id="resDaily"></div>
         <div class="banner fixed hidden" id="resFixed"></div>
+        <div class="banner tickets hidden" id="resTickets">
+          <div id="resTicketsText"></div>
+          <button id="resTicketsBtn" class="small-btn" type="button">🎮 На аэродром</button>
+        </div>
         <div class="banner levelup hidden" id="resLevel"></div>
         <div class="banner newplane hidden" id="resPlane">
           <div class="newplane-pic anim" id="resPlanePic"></div>
           <div id="resPlaneText"></div>
-          <button id="resPlaneBtn" class="small-btn" type="button">✈️ Лететь на нём</button>
+          <div class="banner-btns">
+            <button id="resPlaneBtn" class="small-btn" type="button">✈️ Лететь на нём</button>
+            <button id="resGameBtn" class="small-btn" type="button">🎮 Играть</button>
+          </div>
         </div>
         <div class="mistakes hidden" id="resMistakes"></div>
       </div>
@@ -235,6 +273,51 @@
       <button class="big-btn secondary back-btn" type="button">В меню</button>
     </section>
 
+    <!-- ===== Аэродром: мини-игры ===== -->
+    <section id="arcade" class="screen">
+      <div class="screen-head">
+        <button class="icon-btn back-btn" type="button" aria-label="Назад в меню">←</button>
+        <h2>Аэродром 🎮</h2>
+      </div>
+      <div class="card ticket-card">
+        <div class="ticket-row">
+          <div class="ticket-big">🎟️ <b id="ticketCount">0</b></div>
+          <div>
+            <b>Билеты на мини-игры</b>
+            <div class="ticket-sub" id="ticketSub"></div>
+          </div>
+        </div>
+        <div class="progress thin"><div id="ticketBar"></div></div>
+        <p class="ticket-rule">1 игра = 1 билет. Билет дают за каждые 10 правильных ответов и за сданный экзамен.</p>
+      </div>
+      <div class="games" id="games"></div>
+      <p class="hint" id="gamesHint"></p>
+      <button class="big-btn secondary back-btn" type="button">В меню</button>
+    </section>
+
+    <!-- ===== Мини-игра ===== -->
+    <section id="play" class="screen">
+      <div class="hud">
+        <button id="playQuit" class="icon-btn" type="button" aria-label="Выйти на аэродром">✕</button>
+        <div class="hud-info" id="playTitle"></div>
+        <button class="icon-btn sound-btn small" type="button" aria-label="Звук">🔊</button>
+        <div class="hud-score">🏁 <span id="playScore">0</span></div>
+      </div>
+      <div class="play-stage" id="playStage">
+        <canvas id="playCanvas"></canvas>
+        <div class="play-overlay hidden" id="playOverlay">
+          <div class="po-box">
+            <div class="po-pic anim" id="poPic"></div>
+            <h2 id="poTitle"></h2>
+            <p id="poText"></p>
+            <button id="poGo" class="big-btn" type="button">Играть</button>
+            <p class="po-note" id="poNote"></p>
+            <button id="poBack" class="big-btn secondary" type="button">На аэродром</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
   </main>
 
   <!-- Окно с подсказкой (как установить на телефон) -->
@@ -249,5 +332,6 @@
   <script src="planes.js"></script>
   <script src="boss.js"></script>
   <script src="game.js"></script>
+  <script src="arcade.js"></script>
 </body>
 </html>

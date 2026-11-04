@@ -569,6 +569,121 @@ h2 { font-size: 1.25rem; margin: 0 0 12px; }
 .t-nums { font-size: .78rem; font-weight: 800; color: #8a5a00; text-align: center; word-break: break-word; }
 .trophies .empty { grid-column: 1 / -1; margin: 0; color: var(--muted); text-align: center; }
 
+/* ---------- Экзамены в карточке звания ---------- */
+.exams { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
+.exam-chip {
+  min-width: 34px; padding: 4px 6px;
+  border-radius: 10px;
+  background: #f3f6fc; color: #6d7a99;
+  font-weight: 800; font-size: .85rem; text-align: center;
+  border: 2px dashed #b9c5de;
+}
+.exam-chip.done { background: #e3f7ec; color: #1b7f4b; border: 2px solid var(--good); }
+.exam-chip.done::after { content: ' ✓'; }
+.exam-chip.final { min-width: 40px; }
+
+/* ---------- Сложение ---------- */
+.add-levels { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.add-btn {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 12px 4px;
+  border-radius: 16px;
+  background: #fff4e5;
+  box-shadow: 0 5px 0 #f3c98a;
+  color: #8a4b00;
+}
+.add-btn b { font-size: .95rem; }
+.add-btn span { font-size: .85rem; color: #b26a00; font-variant-numeric: tabular-nums; }
+.add-btn:active { transform: translateY(3px); box-shadow: 0 2px 0 #f3c98a; }
+.add-btn.on { background: #ffe2b8; }
+.question.long { font-size: clamp(2rem, 10.5vw, 3.2rem); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.typed { color: var(--primary); border-bottom: 4px solid var(--primary); padding: 0 4px; min-width: 1.2em; display: inline-block; }
+.typed.empty { color: #b8c4de; border-color: #b8c4de; }
+.keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.kp {
+  height: clamp(50px, 8.5vh, 64px);
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 5px 0 #c9d6f2;
+  font-size: 1.8rem; font-weight: 900; color: var(--primary-dark);
+}
+.kp:active { transform: translateY(3px); box-shadow: 0 2px 0 #c9d6f2; }
+.kp-del { background: #fde7ee; color: #a8324f; box-shadow: 0 5px 0 #f3bccb; }
+.kp-ok { background: var(--good); color: #fff; box-shadow: 0 5px 0 #1f9257; }
+.column {
+  display: inline-grid;
+  grid-template-columns: repeat(var(--cols), 1.05em);
+  justify-content: center;
+  font-size: 2rem; font-weight: 800; line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+  color: var(--navy);
+  margin: 2px 0 6px;
+}
+.cc { text-align: center; }
+.cc.carry { font-size: .55em; color: #ff8a3d; align-self: end; line-height: 1; }
+.cc.op { color: var(--muted); }
+.cline { grid-column: 1 / -1; height: 3px; background: var(--navy); border-radius: 2px; margin: 2px 0; }
+.explain-steps div { text-align: left; margin-top: 4px; color: var(--text); }
+
+/* ---------- Билеты и мини-игры ---------- */
+.arcade-btn { background: #fff7e0; box-shadow: 0 6px 0 #f1d27c; }
+.arcade-btn b { color: #7a5600; }
+.banner.tickets { background: #fff2c2; color: #7a5600; }
+.banner .small-btn { margin-top: 10px; background: var(--primary); color: #fff; }
+.banner-btns { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+.banner-btns .small-btn { margin-top: 10px; }
+#resGameBtn { background: #f2b80c; color: #4a3500; }
+.ticket-row { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.ticket-big { font-size: 2rem; white-space: nowrap; }
+.ticket-big b { color: #7a5600; }
+.ticket-sub { color: var(--muted); font-size: .92rem; }
+.ticket-rule { margin: 8px 0 0; color: var(--muted); font-size: .85rem; }
+.games { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 8px; }
+.game-tile {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 10px 8px 12px;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 5px 0 #c9d6f2;
+  text-align: center;
+}
+.game-tile:active { transform: translateY(3px); box-shadow: 0 2px 0 #c9d6f2; }
+.gt-pic { width: 110px; }
+.game-tile b { font-size: 1rem; color: var(--navy); }
+.gt-sub { font-size: .8rem; color: var(--muted); }
+.game-tile.locked { background: #eef2fa; box-shadow: 0 5px 0 #d8e0f0; }
+.game-tile.locked .plane-svg { filter: brightness(0); opacity: .18; }
+.game-tile.locked b { color: var(--muted); }
+.play-stage { position: relative; }
+#playCanvas {
+  display: block; width: 100%; height: 420px;
+  border-radius: var(--radius);
+  background: #cfe8ff;
+  touch-action: none;
+  box-shadow: var(--shadow);
+}
+.play-overlay {
+  position: absolute; inset: 0;
+  display: grid; place-items: center;
+  padding: 12px;
+  border-radius: var(--radius);
+  background: rgba(20, 30, 60, .35);
+}
+.po-box {
+  width: 100%; max-width: 360px; max-height: 100%; overflow: auto;
+  background: #fff; border-radius: var(--radius);
+  padding: 14px 16px 16px; text-align: center;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, .25);
+}
+.po-pic { width: 150px; margin: 0 auto; }
+.po-pic .plane-svg { animation: fly 2s ease-in-out infinite; }
+.po-box h2 { margin: 6px 0; color: var(--navy); }
+.po-box p { margin: 0; color: var(--muted); line-height: 1.35; }
+.po-box .big-btn { margin-top: 12px; padding: 15px; }
+.po-box .big-btn:disabled { background: #c9d6f2; box-shadow: 0 5px 0 #aebcdc; color: #5f6b88; }
+.po-note { font-size: .9rem; margin-top: 6px !important; }
+.po-note:empty { display: none; }
+
 /* ---------- Окно с подсказкой ---------- */
 .modal {
   position: fixed; inset: 0; z-index: 10;
@@ -600,6 +715,8 @@ h2 { font-size: 1.25rem; margin: 0 0 12px; }
 }
 
 @media (max-height: 640px) {
+  .kp { height: 48px; font-size: 1.6rem; }
+  .flight { padding-top: 4px; padding-bottom: 6px; }
   .arena-stage { height: 96px; }
   .boss { width: 112px; }
   .arena-plane { top: 28px; width: 64px; }

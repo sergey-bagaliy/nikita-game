@@ -12,21 +12,24 @@ const HARD_CHANCE = 0.3;         // как часто в обычном полё
 const DAILY_GOAL = 20;           // задание дня: столько верных ответов
 const DAILY_BONUS = 30;          // очков за задание дня
 const BOSS_BONUS = 50;           // очков за победу над боссом
+const TICKET_EVERY = 10;         // столько верных ответов = 1 билет на мини-игру
+const ADD_QUESTIONS = 10;        // примеров на сложение в одном полёте
 const NUMBERS = [2, 3, 4, 5, 6, 7, 8, 9];
 const STORAGE_KEY = 'nikita-multiply-v1';
 
-// Звания: сколько всего очков нужно набрать. По званиям открываются самолёты (planes.js).
+// Звания: одно за каждый сданный экзамен (бой с Боссом на одном числе), последнее — за финальный экзамен.
+// С каждым званием открывается новый самолёт (planes.js) и его мини-игра (arcade.js).
 const RANKS = [
-  { at: 0,    name: 'Пассажир',            icon: '🧳' },
-  { at: 100,  name: 'Курсант',             icon: '🎒' },
-  { at: 250,  name: 'Пилот-стажёр',        icon: '🪪' },
-  { at: 500,  name: 'Второй пилот',        icon: '🧭' },
-  { at: 800,  name: 'Командир экипажа',    icon: '👨‍✈️' },
-  { at: 1200, name: 'Пилот первого класса', icon: '🎖️' },
-  { at: 1800, name: 'Ас',                  icon: '🦅' },
-  { at: 2600, name: 'Лётчик-испытатель',   icon: '🧪' },
-  { at: 3600, name: 'Капитан неба',        icon: '🌟' },
-  { at: 5000, name: 'Легенда неба',        icon: '👑' },
+  { name: 'Пассажир',            icon: '🧳' },
+  { name: 'Курсант',             icon: '🎒' },
+  { name: 'Пилот-стажёр',        icon: '🪪' },
+  { name: 'Второй пилот',        icon: '🧭' },
+  { name: 'Командир экипажа',    icon: '👨‍✈️' },
+  { name: 'Пилот первого класса', icon: '🎖️' },
+  { name: 'Ас',                  icon: '🦅' },
+  { name: 'Лётчик-испытатель',   icon: '🧪' },
+  { name: 'Капитан неба',        icon: '🌟' },
+  { name: 'Легенда неба',        icon: '👑' },
 ];
 
 // Куда летим в тренировке (вылет всегда из Краснодара)
@@ -57,7 +60,13 @@ const DOT_COLORS = ['#2f6fed', '#22b07d', '#ff8a3d', '#e05bb5', '#2bb3d6', '#9b6
 function defaults() {
   return {
     points: 0, stars: 0, bestSpeed: 0, bestStreak: 0, games: 0,
-    selected: [2, 3, 4, 5], sound: true, plane: 'biplane',
+    selected: [2, 3, 4, 5], sound: true, plane: 'an2',
+    exams: [],          // числа, по которым сдан экзамен (по порядку)
+    finalExam: false,   // сдан финальный экзамен на всю таблицу
+    tickets: 1,         // билеты на мини-игры
+    ticketProgress: 0,  // верных ответов к следующему билету
+    arcadeBest: {},     // рекорды мини-игр
+    addLevel: 'two',    // сложение: two / three / mix
     facts: {},          // как решается каждый пример: «3x7»: { ok, bad, run }
     trophies: [],       // кубки за боссов: { b: номер босса, n: [числа], d: дата }
     bossBest: 0,        // лучший результат в бою с боссом (из 10)
@@ -79,6 +88,12 @@ function loadData() {
   if (!d.facts || typeof d.facts !== 'object') d.facts = {};
   if (!Array.isArray(d.trophies)) d.trophies = [];
   if (!d.daily || typeof d.daily !== 'object') d.daily = defaults().daily;
+  if (!Array.isArray(d.exams)) d.exams = [];
+  d.exams = d.exams.filter((n, i) => NUMBERS.includes(n) && d.exams.indexOf(n) === i);
+  if (!d.arcadeBest || typeof d.arcadeBest !== 'object') d.arcadeBest = {};
+  if (!Number.isFinite(d.tickets) || d.tickets < 0) d.tickets = 0;
+  if (!Number.isFinite(d.ticketProgress) || d.ticketProgress < 0 || d.ticketProgress >= TICKET_EVERY) d.ticketProgress = 0;
+  if (!PLANES.some(p => p.id === d.plane)) d.plane = 'an2'; // старые самолёты заменены новыми
   return d;
 }
 function saveData() {
@@ -104,13 +119,28 @@ function plural(n, one, few, many) {
   if (n10 >= 2 && n10 <= 4 && (n100 < 12 || n100 > 14)) return few;
   return many;
 }
-function rankIndex(points) {
-  let i = 0;
-  while (i + 1 < RANKS.length && points >= RANKS[i + 1].at) i++;
-  return i;
+// Уровень = сколько экзаменов сдано (+1 за финальный). От него зависят звание, самолёты и игры.
+function level() {
+  return Math.min(RANKS.length - 1, data.exams.length + (data.finalExam ? 1 : 0));
 }
 function isUnlocked(plane) {
-  return rankIndex(data.points) >= plane.rank;
+  return level() >= plane.level;
+}
+// Какой экзамен будет в бою с этими числами: число, 'final' или null (обычный бой за кубок)
+function examFor(sel) {
+  if (sel.length === 1 && !data.exams.includes(sel[0])) return sel[0];
+  if (sel.length === NUMBERS.length && data.exams.length >= NUMBERS.length && !data.finalExam) return 'final';
+  return null;
+}
+function unlockText(lv) {
+  if (lv >= RANKS.length - 1) return 'Финальный экзамен';
+  return `Сдай ${lv} ${plural(lv, 'экзамен', 'экзамена', 'экзаменов')}`;
+}
+// Что делать дальше, чтобы получить следующее звание
+function nextStepText() {
+  if (data.finalExam) return 'Самое высокое звание! Ты настоящая легенда неба! 👑';
+  if (data.exams.length >= NUMBERS.length) return 'Сдай финальный экзамен: выбери все числа 2–9 и победи Босса!';
+  return 'Сдай экзамен: выбери одно число и победи Босса — 10 примеров без ошибок';
 }
 function currentPlaneId() {
   const p = planeById(data.plane);
@@ -331,6 +361,7 @@ function showScreen(id) {
 }
 
 function goMenu() {
+  if (typeof arcadeStop === 'function') arcadeStop();
   stopTimers();
   game = null;
   renderMenu();
@@ -346,19 +377,15 @@ function renderSoundButtons() {
 }
 
 function renderMenu() {
-  const ri = rankIndex(data.points);
-  const rank = RANKS[ri];
-  const next = RANKS[ri + 1];
+  const lv = level();
+  const rank = RANKS[lv];
   $('levelIcon').textContent = rank.icon;
   $('levelName').textContent = rank.name;
-  if (next) {
-    const need = next.at - data.points;
-    $('levelSub').textContent = `До звания «${next.name}»: ${need} ${plural(need, 'очко', 'очка', 'очков')}`;
-    $('levelBar').style.width = ((data.points - rank.at) / (next.at - rank.at) * 100) + '%';
-  } else {
-    $('levelSub').textContent = 'Самое высокое звание! Ты настоящая легенда неба!';
-    $('levelBar').style.width = '100%';
-  }
+  $('levelSub').textContent = nextStepText();
+  $('levelBar').style.width = (lv / (RANKS.length - 1) * 100) + '%';
+  $('examList').innerHTML = NUMBERS.map(n =>
+    `<span class="exam-chip${data.exams.includes(n) ? ' done' : ''}" title="${data.exams.includes(n) ? 'Экзамен сдан' : 'Экзамен ещё не сдан'}">×${n}</span>`).join('') +
+    `<span class="exam-chip final${data.finalExam ? ' done' : ''}" title="Финальный экзамен">🏁</span>`;
   $('statStars').textContent = data.stars;
   $('statPoints').textContent = data.points;
   $('statCups').textContent = data.trophies.length;
@@ -390,10 +417,13 @@ function renderMenu() {
   $('speedDesc').textContent = data.bestSpeed
     ? `60 секунд. Рекорд: ${data.bestSpeed}`
     : 'Топлива на 60 секунд — сколько успеешь?';
-  const cups = data.trophies.length;
-  $('bossDesc').textContent = cups
-    ? `10 подряд без ошибок. Кубков: ${cups}`
-    : '10 подряд без ошибок — кубок!';
+  const exam = examFor(data.selected);
+  $('bossDesc').textContent = exam === 'final' ? '🎓 Финальный экзамен!'
+    : exam ? `🎓 Экзамен по ×${exam}!`
+    : data.selected.length === 1 ? `×${data.selected[0]} сдан ✅ Бой за кубок`
+    : 'Выбери одно число — это экзамен 🎓';
+  $('arcadeDesc').textContent = `🎟️ Билетов: ${data.tickets}. Ещё ${TICKET_EVERY - data.ticketProgress} верных — и новый билет`;
+  document.querySelectorAll('.add-btn').forEach(b => b.classList.toggle('on', b.dataset.add === data.addLevel));
   const hard = hardList().length;
   $('mistakesBadge').textContent = hard;
   $('mistakesBadge').classList.toggle('hidden', !hard);
@@ -410,19 +440,19 @@ function renderMenu() {
 }
 
 function renderHangar() {
-  const ri = rankIndex(data.points);
+  const lv = level();
   const chosen = currentPlaneId();
   const box = $('hangar');
   box.innerHTML = '';
   PLANES.forEach(p => {
-    const open = ri >= p.rank;
+    const open = lv >= p.level;
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'plane-tile' + (open ? '' : ' locked') + (p.id === chosen ? ' chosen' : '');
-    b.innerHTML = planeSVG(p.id) + `<span>${open ? p.name : '🔒 ' + RANKS[p.rank].name}</span>`;
+    b.innerHTML = planeSVG(p.id) + `<span>${open ? p.name : '🔒 ' + unlockText(p.level)}</span>`;
     b.addEventListener('click', () => {
       if (!open) {
-        $('hangarHint').textContent = `Этот самолёт откроется на звании «${RANKS[p.rank].name}». Тренируйся — и он будет твоим!`;
+        $('hangarHint').textContent = `${p.name} и игра «${p.game}» откроются на звании «${RANKS[p.level].name}»: ${unlockText(p.level).toLowerCase()}.`;
         return;
       }
       data.plane = p.id;
@@ -433,9 +463,9 @@ function renderHangar() {
     });
     box.appendChild(b);
   });
-  const nextPlane = PLANES.find(p => p.rank > ri);
+  const nextPlane = PLANES.find(p => p.level > lv);
   $('hangarHint').textContent = nextPlane
-    ? `Следующий самолёт откроется на звании «${RANKS[nextPlane.rank].name}»`
+    ? `Следующий: ${nextPlane.name} и игра «${nextPlane.game}». ${unlockText(nextPlane.level)}.`
     : 'Все самолёты собраны! 🎉';
 }
 
@@ -497,15 +527,16 @@ function renderTable() {
     known += rowKnown;
     const cups = data.trophies.filter(t => Array.isArray(t.n) && t.n.includes(n)).length;
     const crown = rowKnown === 10 ? ' 👑' : '';
+    const passed = data.exams.includes(n);
     const actions = openRow === n
       ? `<div class="trow-actions"><button class="small-btn" type="button" data-go="train" data-n="${n}">🗺️ Учить ×${n}</button>` +
-        `<button class="small-btn boss" type="button" data-go="boss" data-n="${n}">👾 Босс ×${n}</button></div>`
+        `<button class="small-btn boss" type="button" data-go="boss" data-n="${n}">${passed ? '👾 Босс' : '🎓 Экзамен'} ×${n}</button></div>`
       : '';
     return `<div class="trow${openRow === n ? ' open' : ''}">` +
       `<button class="trow-btn" type="button" data-row="${n}" aria-expanded="${openRow === n}">` +
       `<span class="trow-head"><span class="tnum">× ${n}</span>` +
       `<span class="tcount">знаю ${rowKnown} из 10${crown}</span>` +
-      `<span class="tcups">${cups ? '🏆' + (cups > 1 ? '×' + cups : '') : ''}</span></span>` +
+      `<span class="tcups">${passed ? '🎓' : ''}${cups ? '🏆' + (cups > 1 ? '×' + cups : '') : ''}</span></span>` +
       `<span class="tcells">${cells.join('')}</span></button>${actions}</div>`;
   });
   $('table').innerHTML = rows.join('');
@@ -552,8 +583,10 @@ function startGame(mode) {
     paused: false,
     lost: false,
     progress: 0,
-    rankBefore: rankIndex(data.points),
+    levelBefore: level(),
     dailyDone: false,
+    tickets: 0,
+    input: '',
     timeLeft: SPEED_TIME,
     lastTick: 0,
     timerId: null,
@@ -571,7 +604,9 @@ function startGame(mode) {
     });
     game.nums = sortedSelected();
     game.bossIndex = data.trophies.length % BOSSES.length;
+    game.exam = examFor(data.selected);
   }
+  if (mode === 'add') game.addLevel = data.addLevel;
   if (mode === 'fix') {
     game.pool = hardList().slice(0, FIX_POOL).map(f => f.key);
     game.need = game.pool.reduce((s, key) => s + FIX_RUN - data.facts[key].run, 0);
@@ -588,6 +623,7 @@ function startGame(mode) {
     train: ['Краснодар', game.city.to],
     speed: ['🛫 Взлёт', 'Посадка 🛬'],
     fix: ['📝 Ошибки', 'Исправлено ✅'],
+    add: ['Краснодар', game.city.to],
   };
   if (!boss) {
     $('fromCity').textContent = labels[mode][0];
@@ -663,7 +699,10 @@ function updateHud() {
     $('fuel').classList.toggle('empty', sec <= 10);
     setFlightProgress(1 - game.timeLeft / SPEED_TIME);
   } else if (game.mode === 'boss') {
-    $('hudInfo').textContent = `👊 ${game.correct} из ${BOSS_QUESTIONS}`;
+    const ex = game.exam === 'final' ? '🎓 Финал' : game.exam ? `🎓 Экзамен ×${game.exam}` : '👊';
+    $('hudInfo').textContent = `${ex} · ${game.correct} из ${BOSS_QUESTIONS}`;
+  } else if (game.mode === 'add') {
+    $('hudInfo').textContent = `➕ Пример ${Math.min(game.asked, ADD_QUESTIONS)} из ${ADD_QUESTIONS}`;
   } else if (game.mode === 'fix') {
     const left = fixRemaining().length;
     $('hudInfo').textContent = left ? `Осталось исправить: ${left}` : 'Всё исправлено! ✨';
@@ -675,8 +714,9 @@ function updateHud() {
 function makeQuestion() {
   if (game.mode === 'boss') {
     const [a, b] = game.deck[game.asked];
-    return { a, b, answer: a * b };
+    return { a, b, answer: a * b, op: '×' };
   }
+  if (game.mode === 'add') return makeAddition(game.addLevel);
   let a, b, tries = 0;
   do {
     if (game.mode === 'fix') {
@@ -696,7 +736,38 @@ function makeQuestion() {
     tries++;
   } while (game.mode !== 'fix' && factKey(a, b) === game.lastKey && tries < 20);
   game.lastKey = factKey(a, b);
-  return { a, b, answer: a * b };
+  return { a, b, answer: a * b, op: '×' };
+}
+
+// Сложение: двузначные, трёхзначные или вперемешку (как 275 + 986)
+function makeAddition(lv) {
+  const two = () => rand(10, 99), three = () => rand(100, 999);
+  let a, b;
+  if (lv === 'two') { a = two(); b = two(); }
+  else if (lv === 'three') { a = three(); b = three(); }
+  else {
+    const r = Math.random();
+    if (r < 0.35) { a = three(); b = two(); }
+    else if (r < 0.6) { a = two(); b = three(); }
+    else { a = three(); b = three(); }
+  }
+  return { a, b, answer: a + b, op: '+' };
+}
+
+function renderTyped() {
+  const q = game.q;
+  $('question').innerHTML = `${q.a} + ${q.b} = <span class="typed${game.input ? '' : ' empty'}">${game.input || '?'}</span>`;
+}
+
+function keypadPress(k) {
+  if (!game || game.mode !== 'add' || game.locked) return;
+  if (k === 'ok') {
+    if (game.input) submitAnswer(Number(game.input), null);
+    return;
+  }
+  if (k === 'del') game.input = game.input.slice(0, -1);
+  else if (game.input.length < 4) game.input = (game.input === '0' ? '' : game.input) + k;
+  renderTyped();
 }
 
 function makeOptions(a, b) {
@@ -717,17 +788,27 @@ function nextQuestion() {
   if (game.mode === 'train' && game.asked >= TRAIN_QUESTIONS) return finishGame();
   if (game.mode === 'boss' && (game.lost || game.correct >= BOSS_QUESTIONS)) return finishGame();
   if (game.mode === 'fix' && (!fixRemaining().length || game.asked >= FIX_MAX)) return finishGame();
+  if (game.mode === 'add' && game.asked >= ADD_QUESTIONS) return finishGame();
 
   game.q = makeQuestion();
   game.asked++;
   game.locked = false;
   game.paused = false;
 
-  $('question').textContent = `${game.q.a} × ${game.q.b} = ?`;
+  const add = game.mode === 'add';
+  $('question').classList.toggle('long', add);
   $('feedback').innerHTML = '&nbsp;';
   $('feedback').className = 'feedback';
   $('explain').classList.add('hidden');
-  $('answers').classList.remove('hidden');
+  $('answers').classList.toggle('hidden', add);
+  $('keypad').classList.toggle('hidden', !add);
+  if (add) {
+    game.input = '';
+    renderTyped();
+    updateHud();
+    return;
+  }
+  $('question').textContent = `${game.q.a} × ${game.q.b} = ?`;
 
   const options = makeOptions(game.q.a, game.q.b);
   document.querySelectorAll('.answer').forEach((btn, i) => {
@@ -740,18 +821,23 @@ function nextQuestion() {
 
 function answer(btn) {
   if (!game || game.locked) return;
-  game.locked = true;
-  const value = Number(btn.textContent);
-  const { a, b, answer: right } = game.q;
-  const ok = value === right;
-  document.querySelectorAll('.answer').forEach(x => { x.disabled = true; });
-  $('question').innerHTML = `${a} × ${b} = <span class="ans">${right}</span>`;
+  submitAnswer(Number(btn.textContent), btn);
+}
 
-  const fixedNow = recordAnswer(a, b, ok);
+function submitAnswer(value, btn) {
+  game.locked = true;
+  const { a, b, answer: right, op } = game.q;
+  const ok = value === right;
+  const mult = op === '×';
+  document.querySelectorAll('.answer').forEach(x => { x.disabled = true; });
+  $('question').innerHTML = `${a} ${op} ${b} = <span class="ans">${right}</span>`;
+
+  const fixedNow = mult ? recordAnswer(a, b, ok) : false;
   if (fixedNow && !game.fixed.includes(factKey(a, b))) game.fixed.push(factKey(a, b));
 
-  // в тренировке самолёт продвигается после каждого примера
+  // в тренировке и сложении самолёт продвигается после каждого примера
   if (game.mode === 'train') setFlightProgress(game.asked / TRAIN_QUESTIONS);
+  if (game.mode === 'add') setFlightProgress(game.asked / ADD_QUESTIONS);
 
   if (ok) {
     game.correct++;
@@ -769,14 +855,24 @@ function answer(btn) {
       game.dailyDone = true;
       completeDaily();
     }
+    // билеты на мини-игры
+    let ticketNow = false;
+    data.ticketProgress++;
+    if (data.ticketProgress >= TICKET_EVERY) {
+      data.ticketProgress = 0;
+      data.tickets++;
+      game.tickets++;
+      ticketNow = true;
+    }
     saveData();
 
-    btn.classList.add('correct');
+    if (btn) btn.classList.add('correct');
     const praise = game.mode === 'boss' ? pick(BOSS_PRAISE) : pick(PRAISE);
     $('feedback').textContent = fixedNow ? `✨ Ошибка исправлена! +${10 + bonus}` : `${praise} +${10 + bonus}`;
     $('feedback').className = 'feedback good';
     $('streak').textContent = dailyNow
       ? `🎯 Задание дня выполнено! +${DAILY_BONUS}`
+      : ticketNow ? '🎟️ +1 билет на мини-игру!'
       : game.streak >= 3 ? `🔥 ${game.streak} подряд! Бонус +5` : ' ';
     $('hudScore').textContent = game.score;
 
@@ -788,7 +884,7 @@ function answer(btn) {
         game.progress = Math.max(game.progress, 1 - left / game.need);
         setFlightProgress(game.progress);
       }
-      if (fixedNow || dailyNow) {
+      if (fixedNow || dailyNow || ticketNow) {
         sounds.sparkle();
         restartAnimation($('flightPlane'), 'hop');
       } else if (game.streak >= 3) {
@@ -804,9 +900,9 @@ function answer(btn) {
   } else {
     game.streak = 0;
     game.paused = true; // пока смотрим объяснение, топливо не тратится
-    game.mistakes.push({ a, b, right });
+    game.mistakes.push({ a, b, right, op });
     saveData();
-    btn.classList.add('wrong');
+    if (btn) btn.classList.add('wrong');
     document.querySelectorAll('.answer').forEach(x => {
       if (Number(x.textContent) === right) x.classList.add('correct');
     });
@@ -818,12 +914,12 @@ function answer(btn) {
       restartAnimation($('boss'), 'laugh');
       sounds.laugh();
     } else {
-      $('feedback').textContent = pick(SUPPORT);
+      $('feedback').textContent = mult ? pick(SUPPORT) : `Не ${value}. Давай посчитаем столбиком:`;
       restartAnimation($('flightPlane'), 'shake');
       sounds.oops();
     }
     $('feedback').className = 'feedback oops';
-    later(() => showExplain(a, b, right), 700);
+    later(() => (mult ? showExplain(a, b, right) : showAddExplain(a, b, right)), 700);
   }
 }
 
@@ -858,6 +954,7 @@ function hitBoss() {
 /* ---- Объяснение ошибки ---- */
 function showExplain(a, b, right) {
   $('answers').classList.add('hidden');
+  $('keypad').classList.add('hidden');
   const count = Math.min(a, b);   // сколько раз складываем
   const part = Math.max(a, b);    // что складываем
   const swapped = a > b ? `${a} × ${b} = ${b} × ${a}, а ` : '';
@@ -900,6 +997,59 @@ function showExplain(a, b, right) {
   $('nextBtn').focus({ preventScroll: true });
 }
 
+// Сложение столбиком: показываем разряды и переносы
+function showAddExplain(a, b, right) {
+  $('answers').classList.add('hidden');
+  $('keypad').classList.add('hidden');
+  const R = String(right), len = R.length;
+  const da = String(a).split('').reverse().map(Number);
+  const db = String(b).split('').reverse().map(Number);
+  const n = Math.max(da.length, db.length);
+  const names = ['Единицы', 'Десятки', 'Сотни', 'Тысячи'];
+  const carries = [];
+  const steps = [];
+  let carry = 0;
+  for (let i = 0; i < n; i++) {
+    const terms = [];
+    if (i < da.length) terms.push(da[i]);
+    if (i < db.length) terms.push(db[i]);
+    if (carry) terms.push(carry);
+    const sum = terms.reduce((x, y) => x + y, 0);
+    const last = i === n - 1;
+    let tail = '';
+    if (last) tail = ` → пишем ${sum}`;
+    else if (sum >= 10) tail = ` → пишем ${sum % 10}, а 1 запоминаем`;
+    else tail = ` → пишем ${sum}`;
+    steps.push(`<div><b>${names[i]}:</b> ${terms.join(' + ')} = ${sum}${tail}</div>`);
+    carry = sum >= 10 ? 1 : 0;
+    carries[i + 1] = carry;
+  }
+  const cell = (ch, cls = '') => `<span class="cc${cls ? ' ' + cls : ''}">${ch}</span>`;
+  const row = (str, i0 = 0) => {
+    let h = '';
+    for (let j = 0; j < len; j++) {
+      const i = len - 1 - j; // разряд
+      const ch = str.length - 1 - i >= 0 ? str[str.length - 1 - i] : '';
+      h += cell(ch);
+    }
+    return h;
+  };
+  let carryRow = '';
+  for (let j = 0; j < len; j++) carryRow += cell(carries[len - 1 - j] ? '1' : '', 'carry');
+  const html = `<div class="column" style="--cols:${len + 1}">` +
+    cell('') + carryRow +
+    cell('') + row(String(a)) +
+    cell('+', 'op') + row(String(b)) +
+    '<span class="cline"></span>' +
+    cell('') + row(R) + '</div>';
+  $('explainTitle').textContent = 'Считаем столбиком, начиная с единиц:';
+  $('explainSum').innerHTML = html;
+  $('explainSteps').innerHTML = steps.join('');
+  $('dots').innerHTML = '';
+  $('explain').classList.remove('hidden');
+  $('nextBtn').focus({ preventScroll: true });
+}
+
 function continueAfterExplain() {
   if (!game) return;
   if (game.mode === 'speed') game.lastTick = performance.now();
@@ -909,7 +1059,7 @@ function continueAfterExplain() {
 /* ================= Посадка (итоги) ================= */
 function starsFor(g) {
   const c = g.correct;
-  if (g.mode === 'train') return c >= 10 ? 3 : c >= 8 ? 2 : c >= 5 ? 1 : 0;
+  if (g.mode === 'train' || g.mode === 'add') return c >= 10 ? 3 : c >= 8 ? 2 : c >= 5 ? 1 : 0;
   if (g.mode === 'speed') return c >= 20 ? 3 : c >= 12 ? 2 : c >= 6 ? 1 : 0;
   if (g.mode === 'boss') return g.correct >= BOSS_QUESTIONS ? 3 : 0;
   const f = g.fixed.length;
@@ -939,8 +1089,15 @@ function finishGame() {
   if (g.mode === 'boss') {
     if (g.correct > data.bossBest) { bossRecord = !won && data.bossBest > 0; data.bossBest = g.correct; }
     if (won) data.trophies.push({ b: g.bossIndex, n: g.nums, d: today() });
+    // экзамен сдан: новое звание, самолёт, игра и подарочный билет
+    if (won && g.exam) {
+      if (g.exam === 'final') data.finalExam = true;
+      else if (!data.exams.includes(g.exam)) data.exams.push(g.exam);
+      data.tickets++;
+      g.tickets++;
+    }
   }
-  const rankAfter = rankIndex(data.points);
+  const levelAfter = level();
   saveData();
 
   const boss = BOSSES[g.bossIndex || 0];
@@ -957,30 +1114,37 @@ function finishGame() {
   $('resBoss').className = 'res-boss' + (lost ? ' laugh' : ' hidden');
 
   let place, title, text, stats;
-  if (g.mode === 'train' || g.mode === 'speed') {
-    place = g.mode === 'train' ? `🛬 Посадка ${g.city.at}!` : '⛽ Топливо закончилось — мягкая посадка!';
+  if (g.mode === 'train' || g.mode === 'speed' || g.mode === 'add') {
+    place = g.mode === 'speed' ? '⛽ Топливо закончилось — мягкая посадка!' : `🛬 Посадка ${g.city.at}!`;
     title = ['Ты молодец, что тренируешься!', 'Хороший полёт!', 'Отличный полёт! 💪', 'Высший пилотаж, Никита! 🏆'][stars];
     text = [
       'Каждый лётчик начинал с учебных полётов. Полетим ещё раз?',
       'Ещё немного тренировок — и звёзд станет больше!',
       'Совсем чуть-чуть до трёх звёзд!',
-      'Три звезды! Ты настоящий ас умножения!',
+      g.mode === 'add' ? 'Три звезды! Ты считаешь как настоящий штурман!' : 'Три звезды! Ты настоящий ас умножения!',
     ][stars];
     stats = [
-      [g.correct, g.mode === 'train' ? 'верно из ' + TRAIN_QUESTIONS : 'верно за 60 сек'],
+      [g.correct, g.mode === 'speed' ? 'верно за 60 сек' : 'верно из ' + (g.mode === 'add' ? ADD_QUESTIONS : TRAIN_QUESTIONS)],
       ['+' + g.score, 'очков'],
       [g.maxStreak, '🔥 лучшая серия'],
     ];
   } else if (g.mode === 'boss') {
-    place = `👾 Бой с боссом «${boss.name}»`;
-    if (won) {
+    const examName = g.exam === 'final' ? 'Финальный экзамен' : g.exam ? `Экзамен ×${g.exam}` : '';
+    place = examName ? `🎓 ${examName} · бой с «${boss.name}»` : `👾 Бой с боссом «${boss.name}»`;
+    if (won && g.exam) {
+      title = g.exam === 'final' ? 'Финальный экзамен сдан! 👑' : `Экзамен ×${g.exam} сдан! 🎓`;
+      text = g.exam === 'final'
+        ? 'Вся таблица умножения покорена! Ты — Легенда неба!'
+        : `10 примеров на ×${g.exam} без единой ошибки! Кубок №${data.trophies.length}, новое звание, самолёт и игра — смотри ниже.`;
+    } else if (won) {
       title = `Победа! Кубок №${data.trophies.length}! 🏆`;
       text = `10 примеров без единой ошибки! Следующий босс — ${nextBoss.icon} «${nextBoss.name}». Он ещё злее!`;
     } else {
-      title = `${boss.name} пока сильнее…`;
+      title = examName ? `${examName} пока не сдан` : `${boss.name} пока сильнее…`;
       text = g.correct >= 7
-        ? `Ты почти победил: ${g.correct} из ${BOSS_QUESTIONS}! Ещё чуть-чуть — и кубок твой!`
-        : `Ты нанёс ${g.correct} ${plural(g.correct, 'удар', 'удара', 'ударов')} из ${BOSS_QUESTIONS}. Попробуй ещё — у тебя получится!`;
+        ? `Ты почти победил: ${g.correct} из ${BOSS_QUESTIONS}! Ещё чуть-чуть — и всё получится!`
+        : `Ты нанёс ${g.correct} ${plural(g.correct, 'удар', 'удара', 'ударов')} из ${BOSS_QUESTIONS}. ` +
+          (g.exam && g.exam !== 'final' ? `Потренируй ×${g.exam} и попробуй снова!` : 'Попробуй ещё — у тебя получится!');
     }
     stats = [
       [g.correct + ' / ' + BOSS_QUESTIONS, 'ударов'],
@@ -1021,21 +1185,25 @@ function finishGame() {
   $('resFixed').classList.toggle('hidden', !fixedCount || g.mode === 'fix');
   $('resFixed').textContent = `✨ Исправлено ${plural(fixedCount, 'ошибка', 'ошибки', 'ошибок')}: ${fixedCount} — ${plural(fixedCount, 'она улетела', 'они улетели', 'они улетели')} из списка!`;
 
-  const rank = RANKS[rankAfter];
-  $('resLevel').classList.toggle('hidden', rankAfter === g.rankBefore);
+  $('resTickets').classList.toggle('hidden', !g.tickets);
+  $('resTicketsText').textContent = `🎟️ +${g.tickets} ${plural(g.tickets, 'билет', 'билета', 'билетов')} на мини-игры! Всего: ${data.tickets}`;
+
+  const rank = RANKS[levelAfter];
+  $('resLevel').classList.toggle('hidden', levelAfter === g.levelBefore);
   $('resLevel').textContent = `${rank.icon} Новое звание: «${rank.name}»!`;
 
-  // новый самолёт в ангаре
-  const fresh = PLANES.filter(p => p.rank > g.rankBefore && p.rank <= rankAfter);
+  // новый самолёт в ангаре и его мини-игра
+  const fresh = PLANES.filter(p => p.level > g.levelBefore && p.level <= levelAfter);
   const box = $('resPlane');
   if (fresh.length) {
     const p = fresh[fresh.length - 1];
     $('resPlanePic').innerHTML = planeSVG(p.id);
-    $('resPlaneText').textContent = `🎁 Новый самолёт в ангаре: «${p.name}»!`;
+    $('resPlaneText').textContent = `🎁 Новый самолёт: ${p.name}! И новая игра на аэродроме: «${p.game}»!`;
     const btn = $('resPlaneBtn');
     btn.dataset.id = p.id;
     btn.disabled = false;
     btn.textContent = '✈️ Лететь на нём';
+    $('resGameBtn').dataset.game = PLANES.indexOf(p);
     box.classList.remove('hidden');
   } else {
     box.classList.add('hidden');
@@ -1044,15 +1212,15 @@ function finishGame() {
   // какие примеры стоит повторить
   const seen = new Set();
   const uniq = g.mistakes.filter(m => {
-    const k = factKey(m.a, m.b);
+    const k = m.op === '+' ? m.a + '+' + m.b : factKey(m.a, m.b);
     if (seen.has(k)) return false;
     seen.add(k);
     return true;
   });
   const mBox = $('resMistakes');
   if (uniq.length) {
-    mBox.innerHTML = '<b>Давай запомним:</b>' + uniq.map(m => `<div>${m.a} × ${m.b} = ${m.right}</div>`).join('') +
-      (g.mode === 'fix' ? '' : '<p>Эти примеры попали в «Мои ошибки». Повтори их — и они улетят из списка.</p>' +
+    mBox.innerHTML = '<b>Давай запомним:</b>' + uniq.map(m => `<div>${m.a} ${m.op || '×'} ${m.b} = ${m.right}</div>`).join('') +
+      (g.mode === 'fix' || g.mode === 'add' ? '' : '<p>Эти примеры попали в «Мои ошибки». Повтори их — и они улетят из списка.</p>' +
         '<button class="small-btn" type="button" data-open-mistakes>📝 Открыть «Мои ошибки»</button>');
     mBox.classList.remove('hidden');
   } else {
@@ -1066,8 +1234,9 @@ function finishGame() {
   again.textContent = {
     train: 'Ещё полёт 🔁',
     speed: 'Ещё раз на скорость 🔁',
-    boss: won ? `Следующий босс ${nextBoss.icon}` : 'Ещё бой ⚔️',
+    boss: won ? `Следующий босс ${nextBoss.icon}` : g.exam ? 'Попробовать снова 🎓' : 'Ещё бой ⚔️',
     fix: 'Повторить ещё 🔁',
+    add: 'Ещё полёт 🔁',
   }[g.mode];
 
   showScreen('result');
@@ -1157,6 +1326,20 @@ $('resPlaneBtn').addEventListener('click', e => {
   e.currentTarget.textContent = 'Выбран ✅';
   sounds.ding();
 });
+document.querySelectorAll('.kp').forEach(b => b.addEventListener('click', () => keypadPress(b.dataset.k)));
+document.addEventListener('keydown', e => { // клавиатура компьютера в режиме сложения
+  if (!game || game.mode !== 'add' || screenNow !== 'game') return;
+  if (/^[0-9]$/.test(e.key)) keypadPress(e.key);
+  else if (e.key === 'Backspace') keypadPress('del');
+  else if (e.key === 'Enter') { e.preventDefault(); if (!$('explain').classList.contains('hidden')) continueAfterExplain(); else keypadPress('ok'); }
+});
+document.querySelectorAll('.add-btn').forEach(b => b.addEventListener('click', () => {
+  data.addLevel = b.dataset.add;
+  saveData();
+  startGame('add');
+}));
+$('resGameBtn').addEventListener('click', e => openGame(Number(e.currentTarget.dataset.game)));
+$('resTicketsBtn').addEventListener('click', () => openArcade());
 $('allBtn').addEventListener('click', () => {
   data.selected = NUMBERS.slice();
   saveData();
