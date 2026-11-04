@@ -682,6 +682,18 @@ h2 { font-size: 1.25rem; margin: 0 0 12px; }
 .po-box .big-btn { margin-top: 12px; padding: 15px; }
 .po-box .big-btn:disabled { background: #c9d6f2; box-shadow: 0 5px 0 #aebcdc; color: #5f6b88; }
 .po-note { font-size: .9rem; margin-top: 6px !important; }
+.po-levels { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 12px; flex-wrap: wrap; }
+.po-levels-title { flex-basis: 100%; text-align: center; font-weight: 800; color: var(--navy); }
+.po-lv {
+  width: 40px; height: 40px;
+  border-radius: 12px;
+  background: #eef2fa; color: var(--primary-dark);
+  font-weight: 900; font-size: 1.1rem;
+  border: 3px solid transparent;
+}
+.po-lv.on { background: #e3ecff; border-color: var(--primary); }
+.po-lv.locked { color: #a7b1c9; font-size: .9rem; }
+.game-tile.won { background: #fff7e0; box-shadow: 0 5px 0 #f1d27c; }
 .po-note:empty { display: none; }
 
 /* ---------- Окно с подсказкой ---------- */

@@ -66,6 +66,8 @@ function defaults() {
     tickets: 1,         // билеты на мини-игры
     ticketProgress: 0,  // верных ответов к следующему билету
     arcadeBest: {},     // рекорды мини-игр
+    arcadeLevel: {},    // до какого уровня открыта каждая мини-игра (1–5)
+    arcadeWon: {},      // мини-игры, пройденные целиком
     addLevel: 'two',    // сложение: two / three / mix
     facts: {},          // как решается каждый пример: «3x7»: { ok, bad, run }
     trophies: [],       // кубки за боссов: { b: номер босса, n: [числа], d: дата }
@@ -91,6 +93,8 @@ function loadData() {
   if (!Array.isArray(d.exams)) d.exams = [];
   d.exams = d.exams.filter((n, i) => NUMBERS.includes(n) && d.exams.indexOf(n) === i);
   if (!d.arcadeBest || typeof d.arcadeBest !== 'object') d.arcadeBest = {};
+  if (!d.arcadeLevel || typeof d.arcadeLevel !== 'object') d.arcadeLevel = {};
+  if (!d.arcadeWon || typeof d.arcadeWon !== 'object') d.arcadeWon = {};
   if (!Number.isFinite(d.tickets) || d.tickets < 0) d.tickets = 0;
   if (!Number.isFinite(d.ticketProgress) || d.ticketProgress < 0 || d.ticketProgress >= TICKET_EVERY) d.ticketProgress = 0;
   if (!PLANES.some(p => p.id === d.plane)) d.plane = 'an2'; // старые самолёты заменены новыми
