@@ -2,13 +2,14 @@
 
 /* Офлайн-режим: после первого открытия игра хранится в телефоне и запускается без интернета.
    Если есть интернет, файлы тихо обновляются, и новая версия появится при следующем запуске.
-   При изменении списка файлов поменяйте номер версии. */
-const CACHE = 'letnaya-shkola-v1';
+   При изменении файлов игры поменяйте номер версии CACHE. */
+const CACHE = 'letnaya-shkola-v2';
 const FILES = [
   './',
   'index.html',
   'style.css',
   'planes.js',
+  'boss.js',
   'game.js',
   'manifest.webmanifest',
   'icon-180.png',
@@ -17,7 +18,12 @@ const FILES = [
 ];
 
 self.addEventListener('install', event => {
-  event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(FILES)).then(() => self.skipWaiting()));
+  // cache: 'reload' — берём свежие файлы с сайта, а не старые из памяти браузера
+  event.waitUntil(
+    caches.open(CACHE)
+      .then(cache => cache.addAll(FILES.map(f => new Request(f, { cache: 'reload' }))))
+      .then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener('activate', event => {
@@ -34,17 +40,20 @@ self.addEventListener('fetch', event => {
   // папка valera/ — отдельная игра со своим офлайн-режимом, её не трогаем
   if (req.method !== 'GET' || url.origin !== self.location.origin || url.pathname.includes('/valera/')) return;
 
-  event.respondWith(caches.open(CACHE).then(async cache => {
-    const cached = await cache.match(req, { ignoreSearch: true })
-      || (req.mode === 'navigate' ? await cache.match('index.html') : undefined);
-    // Обновляем копию в фоне, если есть интернет
-    const fresh = fetch(req)
-      .then(res => {
-        if (res.ok) cache.put(req, res.clone());
-        return res;
-      })
-      .catch(() => cached);
-    event.waitUntil(fresh.then(() => undefined, () => undefined));
-    return cached || fresh;
-  }));
+  // Сразу отдаём сохранённую копию, а в фоне обновляем её, если есть интернет
+  const network = fetch(req).then(res => {
+    if (res.ok && res.type === 'basic') {
+      const copy = res.clone();
+      caches.open(CACHE).then(cache => cache.put(req, copy));
+    }
+    return res;
+  });
+  event.waitUntil(network.then(() => undefined, () => undefined));
+
+  event.respondWith(
+    caches.open(CACHE)
+      .then(cache => cache.match(req, { ignoreSearch: true })
+        .then(hit => hit || (req.mode === 'navigate' ? cache.match('./').then(r => r || cache.match('index.html')) : undefined)))
+      .then(cached => cached || network)
+  );
 });

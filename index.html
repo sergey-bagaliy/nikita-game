@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#7cc6ff">
+  <meta name="theme-color" content="#6cbcff">
   <meta name="description" content="Лётная школа Никиты — весёлый тренажёр таблицы умножения">
   <title>Лётная школа Никиты</title>
   <link rel="icon" type="image/png" href="icon-192.png">
@@ -12,6 +12,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Лётная школа">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -33,7 +34,7 @@
           <h1>Лётная школа <span>Никиты</span></h1>
           <div class="header-plane anim" id="headerPlane"></div>
         </div>
-        <button id="soundBtn" class="icon-btn" type="button" aria-label="Звук">🔊</button>
+        <button class="icon-btn sound-btn" type="button" aria-label="Звук">🔊</button>
       </header>
 
       <div class="card level-card">
@@ -48,8 +49,12 @@
         <div class="stats">
           <div><b id="statStars">0</b><span>⭐ звёзд</span></div>
           <div><b id="statPoints">0</b><span>очков</span></div>
-          <div><b id="statBest">0</b><span>⚡ рекорд</span></div>
-          <div><b id="statStreak">0</b><span>🔥 серия</span></div>
+          <div><b id="statCups">0</b><span>🏆 кубков</span></div>
+          <div><b id="statDays">0</b><span>📅 дней подряд</span></div>
+        </div>
+        <div class="daily" id="daily">
+          <div class="daily-text" id="dailyText"></div>
+          <div class="progress thin"><div id="dailyBar"></div></div>
         </div>
       </div>
 
@@ -71,15 +76,43 @@
         <button class="mode-btn speed" data-mode="speed" type="button">
           <span class="mode-icon">⛽</span>
           <span class="mode-title">На скорость</span>
-          <span class="mode-desc">Топлива на 60 секунд — сколько успеешь?</span>
+          <span class="mode-desc" id="speedDesc">Топлива на 60 секунд</span>
+        </button>
+        <button class="mode-btn boss-mode" data-mode="boss" type="button">
+          <span class="mode-icon">👾</span>
+          <span class="mode-title">Босс</span>
+          <span class="mode-desc" id="bossDesc">10 подряд без ошибок — кубок!</span>
+        </button>
+        <button class="mode-btn fix-mode" id="mistakesBtn" type="button">
+          <span class="mode-badge hidden" id="mistakesBadge">0</span>
+          <span class="mode-icon">📝</span>
+          <span class="mode-title">Мои ошибки</span>
+          <span class="mode-desc" id="mistakesDesc">Повтори трудные примеры</span>
         </button>
       </div>
+
+      <button id="progressBtn" class="wide-btn" type="button">
+        <span class="wide-icon">📊</span>
+        <span><b>Моя таблица умножения</b><span id="progressDesc">Смотри, что уже знаешь</span></span>
+      </button>
 
       <div class="card hangar-card">
         <h2>Мой ангар ✈️</h2>
         <div class="hangar" id="hangar"></div>
         <p class="hint" id="hangarHint"></p>
       </div>
+
+      <div class="card install-card hidden" id="installCard">
+        <div class="install-row">
+          <div class="install-icon">📲</div>
+          <div>
+            <b>Игра на телефоне</b>
+            <div class="install-sub" id="installSub">Установи как приложение — будет работать даже без интернета.</div>
+          </div>
+        </div>
+        <button id="installBtn" class="small-btn wide" type="button">Установить на телефон</button>
+      </div>
+      <p class="offline-note hidden" id="offlineNote">✅ Игра сохранена в телефоне и работает без интернета</p>
     </section>
 
     <!-- ===== Полёт ===== -->
@@ -87,6 +120,7 @@
       <div class="hud">
         <button id="quitBtn" class="icon-btn" type="button" aria-label="Выйти в меню">✕</button>
         <div class="hud-info" id="hudInfo">Пример 1 из 10</div>
+        <button class="icon-btn sound-btn small" type="button" aria-label="Звук">🔊</button>
         <div class="hud-score">⭐ <span id="hudScore">0</span></div>
       </div>
 
@@ -101,6 +135,19 @@
           <span class="fuel-icon">⛽</span>
           <div class="fuel-bar"><div id="fuelBar"></div></div>
           <b id="fuelSec">60</b>
+        </div>
+      </div>
+
+      <div class="arena hidden" id="arena">
+        <div class="arena-top">
+          <span class="boss-name" id="bossName">⚡ Грозовая Туча</span>
+          <div class="boss-hp" id="bossHp" aria-label="Жизни босса"></div>
+        </div>
+        <div class="arena-stage">
+          <div class="arena-plane anim bob" id="arenaPlane"></div>
+          <div class="shot" id="shot">⚡</div>
+          <div class="boss" id="boss"></div>
+          <div class="boss-hit" id="bossHit">−1</div>
         </div>
       </div>
 
@@ -129,10 +176,14 @@
       <div class="card result-card">
         <div class="res-place" id="resPlace"></div>
         <div class="result-stars" id="resStars"></div>
+        <div class="res-cup hidden" id="resCup"><span>🏆</span></div>
+        <div class="res-boss hidden" id="resBoss"></div>
         <h2 id="resTitle"></h2>
         <p class="res-text" id="resText"></p>
         <div class="res-stats" id="resStats"></div>
         <div class="banner record hidden" id="resRecord"></div>
+        <div class="banner daily-done hidden" id="resDaily"></div>
+        <div class="banner fixed hidden" id="resFixed"></div>
         <div class="banner levelup hidden" id="resLevel"></div>
         <div class="banner newplane hidden" id="resPlane">
           <div class="newplane-pic anim" id="resPlanePic"></div>
@@ -145,8 +196,58 @@
       <button id="menuBtn" class="big-btn secondary" type="button">В меню</button>
     </section>
 
+    <!-- ===== Мои ошибки ===== -->
+    <section id="mistakes" class="screen">
+      <div class="screen-head">
+        <button class="icon-btn back-btn" type="button" aria-label="Назад в меню">←</button>
+        <h2>Мои ошибки 📝</h2>
+      </div>
+      <div class="card">
+        <p class="lead" id="mistakesLead"></p>
+        <div class="mistake-list" id="mistakeList"></div>
+      </div>
+      <button id="fixBtn" class="big-btn" type="button">🔁 Повторить трудные</button>
+      <button class="big-btn secondary back-btn" type="button">В меню</button>
+    </section>
+
+    <!-- ===== Таблица прогресса ===== -->
+    <section id="progress" class="screen">
+      <div class="screen-head">
+        <button class="icon-btn back-btn" type="button" aria-label="Назад в меню">←</button>
+        <h2>Моя таблица 📊</h2>
+      </div>
+      <div class="card">
+        <p class="lead" id="tableLead"></p>
+        <div class="table" id="table"></div>
+        <div class="legend">
+          <span><i class="cell known"></i>знаю</span>
+          <span><i class="cell learning"></i>учу</span>
+          <span><i class="cell hard"></i>трудный</span>
+          <span><i class="cell"></i>ещё не решал</span>
+        </div>
+        <p class="hint">Нажми на строчку, чтобы потренировать это число</p>
+      </div>
+      <div class="card trophy-card">
+        <h2>Мои кубки 🏆</h2>
+        <div class="trophies" id="trophies"></div>
+        <p class="hint" id="trophyHint"></p>
+      </div>
+      <button class="big-btn secondary back-btn" type="button">В меню</button>
+    </section>
+
   </main>
+
+  <!-- Окно с подсказкой (как установить на телефон) -->
+  <div class="modal hidden" id="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal-box">
+      <h2 id="modalTitle"></h2>
+      <div id="modalBody"></div>
+      <button id="modalClose" class="big-btn" type="button">Понятно</button>
+    </div>
+  </div>
+
   <script src="planes.js"></script>
+  <script src="boss.js"></script>
   <script src="game.js"></script>
 </body>
 </html>
