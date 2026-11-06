@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#7cc6ff">
+  <meta name="theme-color" content="#6cbcff">
   <meta name="description" content="Лётная школа Никиты — весёлый тренажёр таблицы умножения">
   <title>Лётная школа Никиты</title>
   <link rel="icon" type="image/png" href="icon-192.png">
@@ -12,6 +12,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Лётная школа">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -28,12 +29,13 @@
 
     <!-- ===== Меню ===== -->
     <section id="menu" class="screen active">
+      <div class="card warn-card hidden" id="storageWarn">⚠️ В этом окне прогресс не сохраняется: после закрытия экзамены, самолёты и билеты обнулятся. Откройте игру по ссылке сайта в Chrome или Safari.</div>
       <header class="top">
         <div class="title">
           <h1>Лётная школа <span>Никиты</span></h1>
           <div class="header-plane anim" id="headerPlane"></div>
         </div>
-        <button id="soundBtn" class="icon-btn" type="button" aria-label="Звук">🔊</button>
+        <button class="icon-btn sound-btn" type="button" aria-label="Звук">🔊</button>
       </header>
 
       <div class="card level-card">
@@ -48,9 +50,20 @@
         <div class="stats">
           <div><b id="statStars">0</b><span>⭐ звёзд</span></div>
           <div><b id="statPoints">0</b><span>очков</span></div>
-          <div><b id="statBest">0</b><span>⚡ рекорд</span></div>
-          <div><b id="statStreak">0</b><span>🔥 серия</span></div>
+          <div><b id="statCups">0</b><span>🏆 кубков</span></div>
+          <div><b id="statDays">0</b><span>📅 дней подряд</span></div>
         </div>
+        <div class="daily" id="daily">
+          <div class="daily-text" id="dailyText"></div>
+          <div class="progress thin"><div id="dailyBar"></div></div>
+        </div>
+      </div>
+
+      <div class="card exam-card" id="examCard">
+        <h2>🎓 Экзамены</h2>
+        <p class="exam-lead">Нажми на число и реши 10 примеров на него подряд без ошибок. Сдал экзамен — новое звание, новый самолёт, новая мини-игра и билет 🎟️!</p>
+        <div class="exam-grid" id="examGrid"></div>
+        <p class="hint" id="examHint"></p>
       </div>
 
       <div class="card">
@@ -71,15 +84,58 @@
         <button class="mode-btn speed" data-mode="speed" type="button">
           <span class="mode-icon">⛽</span>
           <span class="mode-title">На скорость</span>
-          <span class="mode-desc">Топлива на 60 секунд — сколько успеешь?</span>
+          <span class="mode-desc" id="speedDesc">Топлива на 60 секунд</span>
+        </button>
+        <button class="mode-btn boss-mode" data-mode="boss" type="button">
+          <span class="mode-icon">👾</span>
+          <span class="mode-title">Босс</span>
+          <span class="mode-desc" id="bossDesc">10 подряд без ошибок — кубок!</span>
+        </button>
+        <button class="mode-btn fix-mode" id="mistakesBtn" type="button">
+          <span class="mode-badge hidden" id="mistakesBadge">0</span>
+          <span class="mode-icon">📝</span>
+          <span class="mode-title">Мои ошибки</span>
+          <span class="mode-desc" id="mistakesDesc">Повтори трудные примеры</span>
         </button>
       </div>
+
+      <div class="card add-card">
+        <h2>➕ Сложение до 1000</h2>
+        <div class="add-levels">
+          <button class="add-btn" data-add="two" type="button"><b>Двузначные</b><span>45 + 38</span></button>
+          <button class="add-btn" data-add="three" type="button"><b>Трёхзначные</b><span>275 + 986</span></button>
+          <button class="add-btn" data-add="mix" type="button"><b>Вперемешку</b><span>347 + 58</span></button>
+        </div>
+        <p class="hint">Ответ набираешь сам, как на калькуляторе. 10 примеров за полёт</p>
+      </div>
+
+      <button id="arcadeBtn" class="wide-btn arcade-btn" type="button">
+        <span class="wide-icon">🎮</span>
+        <span><b>Аэродром: мини-игры</b><span id="arcadeDesc">Билеты за правильные ответы</span></span>
+      </button>
+
+      <button id="progressBtn" class="wide-btn" type="button">
+        <span class="wide-icon">📊</span>
+        <span><b>Моя таблица умножения</b><span id="progressDesc">Смотри, что уже знаешь</span></span>
+      </button>
 
       <div class="card hangar-card">
         <h2>Мой ангар ✈️</h2>
         <div class="hangar" id="hangar"></div>
         <p class="hint" id="hangarHint"></p>
       </div>
+
+      <div class="card install-card hidden" id="installCard">
+        <div class="install-row">
+          <div class="install-icon">📲</div>
+          <div>
+            <b>Игра на телефоне</b>
+            <div class="install-sub" id="installSub">Установи как приложение — будет работать даже без интернета.</div>
+          </div>
+        </div>
+        <button id="installBtn" class="small-btn wide" type="button">Установить на телефон</button>
+      </div>
+      <p class="offline-note hidden" id="offlineNote">✅ Игра сохранена в телефоне и работает без интернета</p>
     </section>
 
     <!-- ===== Полёт ===== -->
@@ -87,6 +143,7 @@
       <div class="hud">
         <button id="quitBtn" class="icon-btn" type="button" aria-label="Выйти в меню">✕</button>
         <div class="hud-info" id="hudInfo">Пример 1 из 10</div>
+        <button class="icon-btn sound-btn small" type="button" aria-label="Звук">🔊</button>
         <div class="hud-score">⭐ <span id="hudScore">0</span></div>
       </div>
 
@@ -104,6 +161,19 @@
         </div>
       </div>
 
+      <div class="arena hidden" id="arena">
+        <div class="arena-top">
+          <span class="boss-name" id="bossName">⚡ Грозовая Туча</span>
+          <div class="boss-hp" id="bossHp" aria-label="Жизни босса"></div>
+        </div>
+        <div class="arena-stage">
+          <div class="arena-plane anim bob" id="arenaPlane"></div>
+          <div class="shot" id="shot">⚡</div>
+          <div class="boss" id="boss"></div>
+          <div class="boss-hit" id="bossHit">−1</div>
+        </div>
+      </div>
+
       <div class="streak" id="streak">&nbsp;</div>
       <div class="question" id="question">2 × 2 = ?</div>
       <div class="feedback" id="feedback">&nbsp;</div>
@@ -113,6 +183,21 @@
         <button class="answer" type="button"></button>
         <button class="answer" type="button"></button>
         <button class="answer" type="button"></button>
+      </div>
+
+      <div class="keypad hidden" id="keypad">
+        <button class="kp" data-k="1" type="button">1</button>
+        <button class="kp" data-k="2" type="button">2</button>
+        <button class="kp" data-k="3" type="button">3</button>
+        <button class="kp" data-k="4" type="button">4</button>
+        <button class="kp" data-k="5" type="button">5</button>
+        <button class="kp" data-k="6" type="button">6</button>
+        <button class="kp" data-k="7" type="button">7</button>
+        <button class="kp" data-k="8" type="button">8</button>
+        <button class="kp" data-k="9" type="button">9</button>
+        <button class="kp kp-del" data-k="del" type="button" aria-label="Стереть">⌫</button>
+        <button class="kp" data-k="0" type="button">0</button>
+        <button class="kp kp-ok" data-k="ok" type="button" aria-label="Проверить">✓</button>
       </div>
 
       <div class="explain hidden" id="explain">
@@ -129,15 +214,26 @@
       <div class="card result-card">
         <div class="res-place" id="resPlace"></div>
         <div class="result-stars" id="resStars"></div>
+        <div class="res-cup hidden" id="resCup"><span>🏆</span></div>
+        <div class="res-boss hidden" id="resBoss"></div>
         <h2 id="resTitle"></h2>
         <p class="res-text" id="resText"></p>
         <div class="res-stats" id="resStats"></div>
         <div class="banner record hidden" id="resRecord"></div>
+        <div class="banner daily-done hidden" id="resDaily"></div>
+        <div class="banner fixed hidden" id="resFixed"></div>
+        <div class="banner tickets hidden" id="resTickets">
+          <div id="resTicketsText"></div>
+          <button id="resTicketsBtn" class="small-btn" type="button">🎮 На аэродром</button>
+        </div>
         <div class="banner levelup hidden" id="resLevel"></div>
         <div class="banner newplane hidden" id="resPlane">
           <div class="newplane-pic anim" id="resPlanePic"></div>
           <div id="resPlaneText"></div>
-          <button id="resPlaneBtn" class="small-btn" type="button">✈️ Лететь на нём</button>
+          <div class="banner-btns">
+            <button id="resPlaneBtn" class="small-btn" type="button">✈️ Лететь на нём</button>
+            <button id="resGameBtn" class="small-btn" type="button">🎮 Играть</button>
+          </div>
         </div>
         <div class="mistakes hidden" id="resMistakes"></div>
       </div>
@@ -145,8 +241,106 @@
       <button id="menuBtn" class="big-btn secondary" type="button">В меню</button>
     </section>
 
+    <!-- ===== Мои ошибки ===== -->
+    <section id="mistakes" class="screen">
+      <div class="screen-head">
+        <button class="icon-btn back-btn" type="button" aria-label="Назад в меню">←</button>
+        <h2>Мои ошибки 📝</h2>
+      </div>
+      <div class="card">
+        <p class="lead" id="mistakesLead"></p>
+        <div class="mistake-list" id="mistakeList"></div>
+      </div>
+      <button id="fixBtn" class="big-btn" type="button">🔁 Повторить трудные</button>
+      <button class="big-btn secondary back-btn" type="button">В меню</button>
+    </section>
+
+    <!-- ===== Таблица прогресса ===== -->
+    <section id="progress" class="screen">
+      <div class="screen-head">
+        <button class="icon-btn back-btn" type="button" aria-label="Назад в меню">←</button>
+        <h2>Моя таблица 📊</h2>
+      </div>
+      <div class="card">
+        <p class="lead" id="tableLead"></p>
+        <div class="table" id="table"></div>
+        <div class="legend">
+          <span><i class="cell known"></i>знаю</span>
+          <span><i class="cell learning"></i>учу</span>
+          <span><i class="cell hard"></i>трудный</span>
+          <span><i class="cell"></i>ещё не решал</span>
+        </div>
+        <p class="hint">Нажми на строчку, чтобы потренировать это число</p>
+      </div>
+      <div class="card trophy-card">
+        <h2>Мои кубки 🏆</h2>
+        <div class="trophies" id="trophies"></div>
+        <p class="hint" id="trophyHint"></p>
+      </div>
+      <button class="big-btn secondary back-btn" type="button">В меню</button>
+    </section>
+
+    <!-- ===== Аэродром: мини-игры ===== -->
+    <section id="arcade" class="screen">
+      <div class="screen-head">
+        <button class="icon-btn back-btn" type="button" aria-label="Назад в меню">←</button>
+        <h2>Аэродром 🎮</h2>
+      </div>
+      <div class="card ticket-card">
+        <div class="ticket-row">
+          <div class="ticket-big">🎟️ <b id="ticketCount">0</b></div>
+          <div>
+            <b>Билеты на мини-игры</b>
+            <div class="ticket-sub" id="ticketSub"></div>
+          </div>
+        </div>
+        <div class="progress thin"><div id="ticketBar"></div></div>
+        <p class="ticket-rule">1 игра = 1 билет. Билет дают за каждые 10 правильных ответов и за сданный экзамен.</p>
+      </div>
+      <div class="games" id="games"></div>
+      <p class="hint" id="gamesHint"></p>
+      <button id="arcadeExamBtn" class="big-btn exam-go" type="button">🎓 Сдать экзамен — открыть новую игру</button>
+      <button class="big-btn secondary back-btn" type="button">В меню</button>
+    </section>
+
+    <!-- ===== Мини-игра ===== -->
+    <section id="play" class="screen">
+      <div class="hud">
+        <button id="playQuit" class="icon-btn" type="button" aria-label="Выйти на аэродром">✕</button>
+        <div class="hud-info" id="playTitle"></div>
+        <button class="icon-btn sound-btn small" type="button" aria-label="Звук">🔊</button>
+        <div class="hud-score">🏁 <span id="playScore">0</span></div>
+      </div>
+      <div class="play-stage" id="playStage">
+        <canvas id="playCanvas"></canvas>
+        <div class="play-overlay hidden" id="playOverlay">
+          <div class="po-box">
+            <div class="po-pic anim" id="poPic"></div>
+            <h2 id="poTitle"></h2>
+            <p id="poText"></p>
+            <div class="po-levels" id="poLevels"></div>
+            <button id="poGo" class="big-btn" type="button">Играть</button>
+            <p class="po-note" id="poNote"></p>
+            <button id="poBack" class="big-btn secondary" type="button">На аэродром</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
   </main>
+
+  <!-- Окно с подсказкой (как установить на телефон) -->
+  <div class="modal hidden" id="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal-box">
+      <h2 id="modalTitle"></h2>
+      <div id="modalBody"></div>
+      <button id="modalClose" class="big-btn" type="button">Понятно</button>
+    </div>
+  </div>
+
   <script src="planes.js"></script>
+  <script src="boss.js"></script>
   <script src="game.js"></script>
+  <script src="arcade.js"></script>
 </body>
 </html>
