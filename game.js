@@ -354,6 +354,7 @@ const sounds = {
 
 /* ================= Экраны ================= */
 let screenNow = 'menu';
+let updateReady = false; // скачана новая версия игры — включим её в меню
 
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.id === id));
@@ -372,6 +373,7 @@ function goMenu() {
   game = null;
   renderMenu();
   showScreen('menu');
+  if (updateReady) location.reload(); // новая версия включается, когда Никита вернулся в меню
 }
 
 /* ================= Меню ================= */
@@ -1437,4 +1439,12 @@ if ('serviceWorker' in navigator && canInstallHere) {
     navigator.serviceWorker.register('sw.js').catch(() => { /* без офлайна игра тоже работает */ });
   });
   navigator.serviceWorker.ready.then(() => $('offlineNote').classList.remove('hidden'));
+  // Пришла новая версия игры (с сайта, в фоне): если Никита в меню — включаем сразу,
+  // если играет — после возвращения в меню, чтобы не прервать полёт.
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || updateReady) return;
+    updateReady = true;
+    if (screenNow === 'menu' && !game) location.reload();
+  });
 }
