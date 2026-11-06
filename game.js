@@ -136,15 +136,17 @@ function examFor(sel) {
   if (sel.length === NUMBERS.length && data.exams.length >= NUMBERS.length && !data.finalExam) return 'final';
   return null;
 }
+// Сколько ещё экзаменов нужно, чтобы открыть уровень lv (самолёт и игру)
 function unlockText(lv) {
-  if (lv >= RANKS.length - 1) return 'Финальный экзамен';
-  return `Сдай ${lv} ${plural(lv, 'экзамен', 'экзамена', 'экзаменов')}`;
+  if (lv >= RANKS.length - 1) return data.exams.length >= NUMBERS.length ? 'Финальный экзамен' : 'Все 8 экзаменов и финал';
+  const need = lv - level();
+  return `Сдай ещё ${need} ${plural(need, 'экзамен', 'экзамена', 'экзаменов')}`;
 }
 // Что делать дальше, чтобы получить следующее звание
 function nextStepText() {
   if (data.finalExam) return 'Самое высокое звание! Ты настоящая легенда неба! 👑';
-  if (data.exams.length >= NUMBERS.length) return 'Сдай финальный экзамен: выбери все числа 2–9 и победи Босса!';
-  return 'Сдай экзамен: выбери одно число и победи Босса — 10 примеров без ошибок';
+  if (data.exams.length >= NUMBERS.length) return 'Осталось сдать финальный экзамен — кнопка 🏁 ниже';
+  return 'Новое звание — за экзамен. Нажми на число в карточке «🎓 Экзамены» ниже';
 }
 function currentPlaneId() {
   const p = planeById(data.plane);
@@ -387,9 +389,8 @@ function renderMenu() {
   $('levelName').textContent = rank.name;
   $('levelSub').textContent = nextStepText();
   $('levelBar').style.width = (lv / (RANKS.length - 1) * 100) + '%';
-  $('examList').innerHTML = NUMBERS.map(n =>
-    `<span class="exam-chip${data.exams.includes(n) ? ' done' : ''}" title="${data.exams.includes(n) ? 'Экзамен сдан' : 'Экзамен ещё не сдан'}">×${n}</span>`).join('') +
-    `<span class="exam-chip final${data.finalExam ? ' done' : ''}" title="Финальный экзамен">🏁</span>`;
+  renderExams();
+  $('storageWarn').classList.toggle('hidden', storageOK);
   $('statStars').textContent = data.stars;
   $('statPoints').textContent = data.points;
   $('statCups').textContent = data.trophies.length;
@@ -421,11 +422,7 @@ function renderMenu() {
   $('speedDesc').textContent = data.bestSpeed
     ? `60 секунд. Рекорд: ${data.bestSpeed}`
     : 'Топлива на 60 секунд — сколько успеешь?';
-  const exam = examFor(data.selected);
-  $('bossDesc').textContent = exam === 'final' ? '🎓 Финальный экзамен!'
-    : exam ? `🎓 Экзамен по ×${exam}!`
-    : data.selected.length === 1 ? `×${data.selected[0]} сдан ✅ Бой за кубок`
-    : 'Выбери одно число — это экзамен 🎓';
+  $('bossDesc').textContent = 'Бой за кубок 🏆 на выбранных числах';
   $('arcadeDesc').textContent = `🎟️ Билетов: ${data.tickets}. Ещё ${TICKET_EVERY - data.ticketProgress} верных — и новый билет`;
   document.querySelectorAll('.add-btn').forEach(b => b.classList.toggle('on', b.dataset.add === data.addLevel));
   const hard = hardList().length;
@@ -489,6 +486,43 @@ function toggleNumber(n) {
   }
   saveData();
   renderMenu();
+}
+
+/* ================= Экзамены ================= */
+// Сохраняется ли прогресс в этом окне (в некоторых встроенных окнах браузера — нет)
+const storageOK = (() => {
+  try {
+    localStorage.setItem('__check', '1');
+    const ok = localStorage.getItem('__check') === '1';
+    localStorage.removeItem('__check');
+    return ok;
+  } catch (e) { return false; }
+})();
+
+function renderExams() {
+  const done = data.exams.length;
+  $('examGrid').innerHTML = NUMBERS.map(n => {
+    const ok = data.exams.includes(n);
+    return `<button type="button" class="exam-btn${ok ? ' done' : ''}" data-exam="${n}" aria-label="Экзамен по числу ${n}${ok ? ' — сдан' : ''}">×${n}<small>${ok ? 'сдан ✓' : 'сдать'}</small></button>`;
+  }).join('') +
+    `<button type="button" class="exam-btn final${data.finalExam ? ' done' : ''}${done < NUMBERS.length ? ' locked' : ''}" data-exam="final" aria-label="Финальный экзамен">🏁<small>${data.finalExam ? 'сдан ✓' : 'финал'}</small></button>`;
+  const next = PLANES.find(p => p.level > level());
+  $('examHint').textContent = `Сдано: ${done} из ${NUMBERS.length}` + (data.finalExam ? ' и финал! 👑' : next ? `. Следующий экзамен откроет ${next.name} и игру «${next.game}»` : '');
+}
+
+// Экзамен по числу n (или финальный): 10 разных примеров подряд без ошибок
+function startExam(n) {
+  if (n === 'final') {
+    if (data.exams.length < NUMBERS.length) { $('examHint').textContent = 'Финальный экзамен откроется, когда сдашь все 8 чисел.'; return; }
+    startGame('boss', data.finalExam ? { nums: NUMBERS } : { nums: NUMBERS, exam: 'final' });
+    return;
+  }
+  startGame('boss', data.exams.includes(n) ? { nums: [n], exam: null } : { nums: [n], exam: n });
+}
+
+function openExams() {
+  goMenu();
+  setTimeout(() => $('examCard').scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
 }
 
 /* ================= Мои ошибки ================= */
@@ -569,7 +603,9 @@ function openProgress() {
 /* ================= Полёт (игра) ================= */
 let game = null;
 
-function startGame(mode) {
+let lastOpts = {};
+function startGame(mode, opts = {}) {
+  lastOpts = opts;
   stopTimers();
   if (mode === 'fix' && !hardList().length) { openMistakes(); return; }
   game = {
@@ -601,14 +637,15 @@ function startGame(mode) {
   if (mode === 'boss') {
     // 10 разных примеров из выбранных чисел
     const keys = new Set();
-    data.selected.forEach(n => { for (let k = 1; k <= 10; k++) keys.add(factKey(n, k)); });
+    const nums = opts.nums || data.selected;
+    nums.forEach(n => { for (let k = 1; k <= 10; k++) keys.add(factKey(n, k)); });
     game.deck = shuffle([...keys]).slice(0, BOSS_QUESTIONS).map(key => {
       const [lo, hi] = splitKey(key);
       return Math.random() < 0.5 ? [lo, hi] : [hi, lo];
     });
-    game.nums = sortedSelected();
+    game.nums = nums.slice().sort((a, b) => a - b);
     game.bossIndex = data.trophies.length % BOSSES.length;
-    game.exam = examFor(data.selected);
+    game.exam = 'exam' in opts ? opts.exam : examFor(nums);
   }
   if (mode === 'add') game.addLevel = data.addLevel;
   if (mode === 'fix') {
@@ -1142,7 +1179,7 @@ function finishGame() {
         : `10 примеров на ×${g.exam} без единой ошибки! Кубок №${data.trophies.length}, новое звание, самолёт и игра — смотри ниже.`;
     } else if (won) {
       title = `Победа! Кубок №${data.trophies.length}! 🏆`;
-      text = `10 примеров без единой ошибки! Следующий босс — ${nextBoss.icon} «${nextBoss.name}». Он ещё злее!`;
+      text = `10 примеров без единой ошибки! Это был бой за кубок. Новый самолёт и игру даёт экзамен: в меню нажми на число в карточке «🎓 Экзамены».`;
     } else {
       title = examName ? `${examName} пока не сдан` : `${boss.name} пока сильнее…`;
       text = g.correct >= 7
@@ -1233,12 +1270,13 @@ function finishGame() {
 
   // Кнопка «ещё раз»
   const again = $('againBtn');
-  again.dataset.mode = g.mode;
+  const examPassed = won && g.exam;
+  again.dataset.mode = examPassed ? 'exams' : g.mode;
   again.classList.toggle('hidden', g.mode === 'fix' && !hardLeft);
   again.textContent = {
     train: 'Ещё полёт 🔁',
     speed: 'Ещё раз на скорость 🔁',
-    boss: won ? `Следующий босс ${nextBoss.icon}` : g.exam ? 'Попробовать снова 🎓' : 'Ещё бой ⚔️',
+    boss: examPassed ? (data.finalExam ? 'В меню ✈️' : 'Следующий экзамен 🎓') : won ? `Следующий босс ${nextBoss.icon}` : g.exam ? 'Попробовать снова 🎓' : 'Ещё бой ⚔️',
     fix: 'Повторить ещё 🔁',
     add: 'Ещё полёт 🔁',
   }[g.mode];
@@ -1316,11 +1354,19 @@ document.querySelectorAll('.sound-btn').forEach(btn => btn.addEventListener('cli
   if (data.sound) sounds.chime();
 }));
 $('mistakesBtn').addEventListener('click', openMistakes);
+$('examGrid').addEventListener('click', e => {
+  const b = e.target.closest('[data-exam]');
+  if (b) startExam(b.dataset.exam === 'final' ? 'final' : Number(b.dataset.exam));
+});
 $('progressBtn').addEventListener('click', openProgress);
 $('fixBtn').addEventListener('click', () => startGame('fix'));
 $('nextBtn').addEventListener('click', continueAfterExplain);
 $('quitBtn').addEventListener('click', goMenu);
-$('againBtn').addEventListener('click', e => startGame(e.currentTarget.dataset.mode || 'train'));
+$('againBtn').addEventListener('click', e => {
+  const mode = e.currentTarget.dataset.mode || 'train';
+  if (mode === 'exams') { openExams(); return; }
+  startGame(mode, mode === 'boss' ? lastOpts : {});
+});
 $('menuBtn').addEventListener('click', goMenu);
 $('resMistakes').addEventListener('click', e => { if (e.target.closest('[data-open-mistakes]')) openMistakes(); });
 $('resPlaneBtn').addEventListener('click', e => {
@@ -1352,7 +1398,9 @@ $('allBtn').addEventListener('click', () => {
 $('table').addEventListener('click', e => {
   const go = e.target.closest('[data-go]');
   if (go) {
-    data.selected = [Number(go.dataset.n)];
+    const n = Number(go.dataset.n);
+    if (go.dataset.go === 'boss') { startExam(n); return; }
+    data.selected = [n];
     saveData();
     startGame(go.dataset.go);
     return;

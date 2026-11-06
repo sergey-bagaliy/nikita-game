@@ -569,18 +569,26 @@ h2 { font-size: 1.25rem; margin: 0 0 12px; }
 .t-nums { font-size: .78rem; font-weight: 800; color: #8a5a00; text-align: center; word-break: break-word; }
 .trophies .empty { grid-column: 1 / -1; margin: 0; color: var(--muted); text-align: center; }
 
-/* ---------- Экзамены в карточке звания ---------- */
-.exams { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
-.exam-chip {
-  min-width: 34px; padding: 4px 6px;
-  border-radius: 10px;
-  background: #f3f6fc; color: #6d7a99;
-  font-weight: 800; font-size: .85rem; text-align: center;
-  border: 2px dashed #b9c5de;
+/* ---------- Экзамены ---------- */
+.exam-card { border: 3px solid #ffd98a; }
+.exam-lead { margin: 0 0 12px; color: var(--muted); line-height: 1.35; }
+.exam-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.exam-btn {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 10px 4px 8px;
+  border-radius: 16px;
+  background: #fff4e5; color: #8a4b00;
+  box-shadow: 0 5px 0 #f3c98a;
+  font-size: 1.6rem; font-weight: 900; line-height: 1.1;
 }
-.exam-chip.done { background: #e3f7ec; color: #1b7f4b; border: 2px solid var(--good); }
-.exam-chip.done::after { content: ' ✓'; }
-.exam-chip.final { min-width: 40px; }
+.exam-btn small { font-size: .78rem; font-weight: 800; }
+.exam-btn:active { transform: translateY(3px); box-shadow: 0 2px 0 #f3c98a; }
+.exam-btn.done { background: #e3f7ec; color: #1b7f4b; box-shadow: 0 5px 0 #9fd9b8; }
+.exam-btn.final { background: #e3ecff; color: var(--navy); box-shadow: 0 5px 0 #c9d6f2; }
+.exam-btn.final.done { background: #e3f7ec; color: #1b7f4b; box-shadow: 0 5px 0 #9fd9b8; }
+.exam-btn.locked { opacity: .55; }
+.warn-card { background: #fff2c2; color: #7a5600; font-weight: 700; line-height: 1.35; }
+.big-btn.exam-go { background: #f2b80c; color: #4a3500; box-shadow: 0 5px 0 #c99400; }
 
 /* ---------- Сложение ---------- */
 .add-levels { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }

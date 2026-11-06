@@ -29,6 +29,7 @@
 
     <!-- ===== Меню ===== -->
     <section id="menu" class="screen active">
+      <div class="card warn-card hidden" id="storageWarn">⚠️ В этом окне прогресс не сохраняется: после закрытия экзамены, самолёты и билеты обнулятся. Откройте игру по ссылке сайта в Chrome или Safari.</div>
       <header class="top">
         <div class="title">
           <h1>Лётная школа <span>Никиты</span></h1>
@@ -46,7 +47,6 @@
           </div>
         </div>
         <div class="progress"><div id="levelBar"></div></div>
-        <div class="exams" id="examList" aria-label="Экзамены по числам"></div>
         <div class="stats">
           <div><b id="statStars">0</b><span>⭐ звёзд</span></div>
           <div><b id="statPoints">0</b><span>очков</span></div>
@@ -57,6 +57,13 @@
           <div class="daily-text" id="dailyText"></div>
           <div class="progress thin"><div id="dailyBar"></div></div>
         </div>
+      </div>
+
+      <div class="card exam-card" id="examCard">
+        <h2>🎓 Экзамены</h2>
+        <p class="exam-lead">Нажми на число и реши 10 примеров на него подряд без ошибок. Сдал экзамен — новое звание, новый самолёт, новая мини-игра и билет 🎟️!</p>
+        <div class="exam-grid" id="examGrid"></div>
+        <p class="hint" id="examHint"></p>
       </div>
 
       <div class="card">
@@ -292,6 +299,7 @@
       </div>
       <div class="games" id="games"></div>
       <p class="hint" id="gamesHint"></p>
+      <button id="arcadeExamBtn" class="big-btn exam-go" type="button">🎓 Сдать экзамен — открыть новую игру</button>
       <button class="big-btn secondary back-btn" type="button">В меню</button>
     </section>
 

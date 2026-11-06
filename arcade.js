@@ -336,9 +336,9 @@ const ARCADE = [
     levels: [
       { goal: 6, gap: 0.42, sp: 0.36, birds: 0, move: 0, bolts: 0, news: 'Собирай звёзды в просветах' },
       { goal: 8, gap: 0.4, sp: 0.4, birds: 1, move: 0, bolts: 0, news: 'Появились птицы — облетай их!' },
-      { goal: 10, gap: 0.38, sp: 0.43, birds: 1, move: 1, bolts: 0, news: 'Тучи двигаются вверх-вниз!' },
-      { goal: 12, gap: 0.36, sp: 0.46, birds: 1, move: 1, bolts: 1, news: 'Молнии в просветах! Жди, пока погаснет жёлтая линия' },
-      { goal: 14, gap: 0.34, sp: 0.5, birds: 1.6, move: 1, bolts: 1, news: 'Всё вместе и быстрее!' },
+      { goal: 10, gap: 0.39, sp: 0.43, birds: 1, move: 0.07, bolts: 0, news: 'Тучи двигаются вверх-вниз!' },
+      { goal: 12, gap: 0.4, sp: 0.45, birds: 0.8, move: 0, bolts: 0.45, news: 'Молния в части просвета — лети через свободную часть!' },
+      { goal: 14, gap: 0.42, sp: 0.48, birds: 0.8, move: 0.045, bolts: 0.45, news: 'Всё вместе и быстрее!' },
     ],
     skies: [['#5fb2f5', '#dff2ff'], ['#6aa8ee', '#e6f2ff'], ['#7b9fe0', '#ffd9b8'], ['#5a6f9e', '#c7b3d6'], ['#3d4f7c', '#8fa3c7']],
     start(W, H) {
@@ -361,23 +361,25 @@ const ARCADE = [
       const sp = W * L.sp;
       s.field = (s.field + sp * dt) % 40;
       if ((s.spawn -= dt) <= 0) {
-        const gap = H * L.gap, gy = rnd(H * 0.12 + gap / 2, G - H * 0.08 - gap / 2);
-        s.cols.push({ x: W + 40, w: 56, gap, base: gy, gy, ph: rnd(0, TAU), passed: false, star: chance(0.65), bolt: L.bolts && chance(0.5), bt: rnd(0, 2.4), phase: 0 });
+        const gap = H * L.gap, lo = H * 0.12 + gap / 2, hi = G - H * 0.08 - gap / 2;
+        const prev = s.cols.length ? s.cols[s.cols.length - 1].base : (lo + hi) / 2;
+        const gy = clamp(prev + rnd(-H * 0.2, H * 0.2), lo, hi); // соседние просветы на близкой высоте
+        const zone = L.bolts && chance(L.bolts) ? (chance(0.5) ? 'top' : 'bottom') : null; // молния в верхней или нижней части просвета
+        s.cols.push({ x: W + 40, w: 56, gap, base: gy, gy, ph: rnd(0, TAU), passed: false, star: chance(0.65), zone, zk: 0.33 });
         s.spawn = 0.63 / L.sp;
       }
       const hw = s.pw * 0.36, hh = s.pw * 0.12;
       s.cols.forEach(c => {
         c.x -= sp * dt;
-        if (L.move) c.gy = clamp(c.base + Math.sin(s.lt * 1.6 + c.ph) * H * 0.08, H * 0.08 + c.gap / 2, G - H * 0.05 - c.gap / 2);
-        c.phase = (s.lt + c.bt) % 2.4;
-        c.strike = c.bolt && c.phase > 2 && c.phase < 2.35;
-        if (c.bolt && c.phase > 1.95 && c.phase < 2.1 && !c.rang && c.x < W) { c.rang = true; sfx.thunder(); }
-        if (c.phase < 1) c.rang = false;
+        if (L.move) c.gy = clamp(c.base + Math.sin(s.lt * 1.3 + c.ph) * H * L.move, H * 0.08 + c.gap / 2, G - H * 0.05 - c.gap / 2);
+        const zh = c.gap * c.zk, zt = c.zone === 'top' ? c.gy - c.gap / 2 : c.gy + c.gap / 2 - zh;
+        c.sy = c.zone === 'top' ? c.gy + zh / 2 : c.zone === 'bottom' ? c.gy - zh / 2 : c.gy; // середина свободной части
+        if (c.zone && !c.rang && c.x < W) { c.rang = true; sfx.thunder(); }
         if (!c.passed && c.x + c.w / 2 < s.x - hw) { c.passed = true; addScore(s, 1); progress(s); sfx.pick(); }
         const inX = s.x + hw > c.x - c.w / 2 && s.x - hw < c.x + c.w / 2;
         if (inX && (s.y - hh < c.gy - c.gap / 2 || s.y + hh > c.gy + c.gap / 2)) hurt(s, s.x, s.y);
-        if (inX && c.strike) hurt(s, s.x, s.y);
-        if (c.star && Math.abs(c.x - s.x) < hw && Math.abs(c.gy - s.y) < hh + 14) { c.star = false; addScore(s, 2, c.x, c.gy - 16); burst(s, c.x, c.gy, '#ffd23f', 8, 90); sfx.pick(); }
+        if (inX && c.zone && s.y + hh > zt && s.y - hh < zt + zh) hurt(s, s.x, s.y);
+        if (c.star && Math.abs(c.x - s.x) < hw && Math.abs(c.sy - s.y) < hh + 14) { c.star = false; addScore(s, 2, c.x, c.sy - 16); burst(s, c.x, c.sy, '#ffd23f', 8, 90); sfx.pick(); }
       });
       s.cols = s.cols.filter(c => c.x > -80);
       if (L.birds && (s.bspawn -= dt) <= 0) {
@@ -401,11 +403,16 @@ const ARCADE = [
       ctx.fillStyle = '#d9c46a';
       for (let x = -s.field; x < W; x += 40) ctx.fillRect(x, G + 5, 18, H - G);
       s.cols.forEach(c => {
-        stormColumn(ctx, c.x, c.w, 0, c.gy - c.gap / 2, 'down', c.bolt);
-        stormColumn(ctx, c.x, c.w, c.gy + c.gap / 2, G, 'up', c.bolt);
-        if (c.bolt && c.phase > 1.2 && c.phase < 2) warnLine(ctx, c.x, c.gy - c.gap / 2 + 6, c.x, c.gy + c.gap / 2 - 6, s.t);
-        if (c.strike) drawBolt(ctx, c.x, c.gy - c.gap / 2, c.x, c.gy + c.gap / 2, 5);
-        if (c.star) star(ctx, c.x, c.gy, 11, '#ffd23f', s.t * 2);
+        stormColumn(ctx, c.x, c.w, 0, c.gy - c.gap / 2, 'down', !!c.zone);
+        stormColumn(ctx, c.x, c.w, c.gy + c.gap / 2, G, 'up', !!c.zone);
+        if (c.zone) { // постоянная молния в части просвета — её видно издалека
+          const zh = c.gap * c.zk, zt = c.zone === 'top' ? c.gy - c.gap / 2 : c.gy + c.gap / 2 - zh;
+          ctx.fillStyle = `rgba(255, 220, 80, ${0.25 + Math.sin(s.t * 20) * 0.08})`;
+          ctx.fillRect(c.x - c.w / 2, zt, c.w, zh);
+          drawBolt(ctx, c.x - c.w / 2, zt + zh * rnd(0.2, 0.8), c.x + c.w / 2, zt + zh * rnd(0.2, 0.8), 4);
+          drawBolt(ctx, c.x + rnd(-14, 14), zt, c.x + rnd(-14, 14), zt + zh, 3);
+        }
+        if (c.star) star(ctx, c.x, c.sy == null ? c.gy : c.sy, 11, '#ffd23f', s.t * 2);
       });
       s.birds.forEach(b => bird(ctx, b.x, b.y, 11, s.t));
       drawSprite(ctx, a.img, s.x, s.y, s.pw, clamp(s.vy / (H * 1.4), -0.45, 0.6), false, blink(s));
@@ -518,14 +525,14 @@ const ARCADE = [
   /* ---------- 3. Ми-8: «Посылки» ---------- */
   {
     icon: '📦',
-    how: 'Грузовой самолёт сбрасывает посылки на парашютах. Води пальцем влево-вправо и лови их вертолётом — не дай упасть на землю! Берегись града, птиц и молний. Парашютистов не задевай.',
+    how: 'Грузовой самолёт сбрасывает посылки на парашютах. Води пальцем — вертолёт летит за ним — и лови посылки. Упавшая посылка не засчитывается. Жизни отнимают град, птицы и молнии. Парашютистов не задевай.',
     goal: L => `Цель: поймай ${L.goal} посылок`,
     levels: [
-      { goal: 8, fall: 0.13, every: 1.3, hail: 0.12, wind: 0, jumpers: 0, birds: 0, bolt: 0, news: 'Золотая посылка — 3 очка' },
-      { goal: 10, fall: 0.15, every: 1.2, hail: 0.15, wind: 0.6, jumpers: 1, birds: 0, bolt: 0, news: 'Ветер! И прыгают парашютисты — не задень их' },
-      { goal: 12, fall: 0.17, every: 1.1, hail: 0.18, wind: 0.8, jumpers: 1, birds: 1, bolt: 0, news: 'Птицы летают низко!' },
-      { goal: 14, fall: 0.19, every: 1, hail: 0.22, wind: 0.9, jumpers: 1, birds: 1, bolt: 1, news: 'Молнии! Уходи из-под жёлтой полосы' },
-      { goal: 16, fall: 0.22, every: 0.9, hail: 0.26, wind: 1, jumpers: 1, birds: 1.4, bolt: 1, news: 'Самый сильный шторм!' },
+      { goal: 8, fall: 0.13, every: 1.3, hail: 0, wind: 0, jumpers: 0, birds: 0, bolt: 0, news: 'Золотая посылка — 3 очка' },
+      { goal: 10, fall: 0.14, every: 1.25, hail: 0.05, wind: 0.5, jumpers: 0, birds: 0, bolt: 0, news: 'Град! И ветер сносит посылки' },
+      { goal: 12, fall: 0.15, every: 1.2, hail: 0.06, wind: 0.6, jumpers: 1, birds: 0.7, bolt: 0, news: 'Прыгают парашютисты, летают птицы' },
+      { goal: 14, fall: 0.16, every: 1.15, hail: 0.07, wind: 0.7, jumpers: 1, birds: 0.8, bolt: 1, news: 'Молнии! Уходи из-под жёлтой полосы' },
+      { goal: 16, fall: 0.17, every: 1.1, hail: 0.08, wind: 0.8, jumpers: 1, birds: 0.9, bolt: 1, news: 'Самый сильный шторм!' },
     ],
     start(W, H) {
       return base({ x: W / 2, y: H * 0.62, pw: pwOf(W) * 1.05, dir: 1, items: [], bg: makeClouds(W, H, 3, 0.18, 0.32), cargo: { x: -60, drop: 0.6 }, wind: 0, bolts: [] });
@@ -538,6 +545,7 @@ const ARCADE = [
       if (inp.has) {
         const d = clamp(inp.x, s.pw * 0.45, W - s.pw * 0.45) - s.x;
         s.x += d * Math.min(1, dt * 8);
+        s.y += (clamp(inp.y, H * 0.45, H * 0.78) - s.y) * Math.min(1, dt * 8);
         if (Math.abs(d) > 3) s.dir = d > 0 ? 1 : -1;
       }
       moveClouds(s.bg, dt, 12, W);
@@ -551,11 +559,11 @@ const ARCADE = [
         s.items.push({ kind: jumper ? 'jumper' : chance(0.12) ? 'gold' : 'box', x: c.x, y: H * 0.1 + 10, vy: H * L.fall * (jumper ? 0.8 : 1), ph: rnd(0, TAU) });
         c.drop = L.every * rnd(0.8, 1.2);
       }
-      if ((s.hspawn -= dt) <= 0) { s.items.push({ kind: 'hail', x: rnd(20, W - 20), y: H * 0.25, vy: H * 0.42 }); s.hspawn = rnd(0.6, 1.4) / (L.hail * 6); }
+      if (L.hail && (s.hspawn -= dt) <= 0) { s.items.push({ kind: 'hail', x: rnd(20, W - 20), y: H * 0.2, vy: H * 0.3 }); s.hspawn = rnd(0.6, 1.4) / (L.hail * 6); }
       if (L.birds && (s.bspawn -= dt) <= 0) {
         const fromLeft = chance(0.5);
-        s.items.push({ kind: 'bird', x: fromLeft ? -20 : W + 20, y: s.y + rnd(-30, 30), vx: (fromLeft ? 1 : -1) * W * 0.32, ph: rnd(0, TAU) });
-        s.bspawn = rnd(2.5, 4.5) / L.birds;
+        s.items.push({ kind: 'bird', x: fromLeft ? -20 : W + 20, y: rnd(H * 0.47, H * 0.76), vx: (fromLeft ? 1 : -1) * W * 0.26, ph: rnd(0, TAU) });
+        s.bspawn = rnd(3.5, 5.5) / L.birds;
       }
       if (L.bolt && (s.boltT -= dt) <= 0) { s.bolts.push({ x: rnd(30, W - 30), warn: 1, strike: 0.3 }); s.boltT = rnd(3, 5); }
       s.bolts.forEach(b => {
@@ -590,8 +598,8 @@ const ARCADE = [
         if (!it.done && (it.kind === 'box' || it.kind === 'gold') && it.y > G) {
           it.done = true;
           burst(s, it.x, G, '#8d6e63', 10, 70);
-          say(s, it.x, G - 24, 'Упала!', '#ffe0e0');
-          hurt(s, it.x, G, true);
+          say(s, it.x, G - 24, 'Упала!', '#ffe0e0'); // не засчитывается, но жизнь не отнимает
+          sfx.hit();
         }
         if (it.kind === 'jumper' && it.y > G - 4 && !it.landed) { it.landed = true; it.y = G - 4; it.wait = 2; }
         if (it.landed && (it.wait -= dt) <= 0) it.done = true;
@@ -638,7 +646,7 @@ const ARCADE = [
   /* ---------- 4. Ка-32: «Спасатель» ---------- */
   {
     icon: '🙋',
-    how: 'Половодье! Люди и животные ждут на крышах. Веди вертолёт пальцем влево-вправо и зависни над ними, пока круг не станет зелёным. Не успеешь — человек прыгнет в воду. Дальше: птицы, ветер, гроза.',
+    how: 'Половодье! Люди и животные ждут на крышах. Веди вертолёт пальцем и зависни над ними, пока круг не станет зелёным. Не успеешь — человек прыгнет в воду. Дальше: птицы (облетай их выше или ниже), ветер, гроза.',
     goal: L => `Цель: спаси ${L.goal} жителей`,
     levels: [
       { goal: 4, active: 1, T: 9, pets: 0, birds: 0, wind: 0, bolt: 0, news: 'Зависни над человеком на крыше' },
@@ -650,7 +658,7 @@ const ARCADE = [
     start(W, H) {
       const roofs = [0.14, 0.38, 0.62, 0.86].map(k => ({ x: W * k, w: Math.min(64, W * 0.19), y: H * rnd(0.64, 0.7) }));
       const logs = Array.from({ length: 3 }, () => ({ x: rnd(0, W), w: rnd(26, 40) }));
-      return base({ x: W / 2, y: H * 0.26, pw: pwOf(W) * 1.05, dir: 1, roofs, people: [], birds: [], bolts: [], swimmers: [], rain: makeRain(W, H, 50), waterY: H * 0.8, logs, windF: 0 });
+      return base({ x: W / 2, y: H * 0.26, hy: H * 0.26, pw: pwOf(W) * 1.05, dir: 1, roofs, people: [], birds: [], bolts: [], swimmers: [], rain: makeRain(W, H, 50), waterY: H * 0.8, logs, windF: 0 });
     },
     setup(s) { s.people = []; s.birds = []; s.bolts = []; s.swimmers = []; s.spawn = 0.8; s.bspawn = 3; s.boltT = 4; s.windT = 0; s.windF = 0; },
     box: s => ({ x: s.x, y: s.y, hw: s.pw * 0.4, hh: s.pw * 0.16 }),
@@ -660,13 +668,14 @@ const ARCADE = [
       if (inp.has) {
         const d = clamp(inp.x, s.pw * 0.45, W - s.pw * 0.45) - s.x;
         s.x += d * Math.min(1, dt * 7);
+        s.hy += (clamp(inp.y, H * 0.14, H * 0.44) - s.hy) * Math.min(1, dt * 7);
         if (Math.abs(d) > 3) s.dir = d > 0 ? 1 : -1;
       }
       if (L.wind) {
         if ((s.windT -= dt) <= 0) { s.windF = (chance(0.5) ? -1 : 1) * W * rnd(0.08, 0.14); s.windT = rnd(3, 5); }
         s.x = clamp(s.x + s.windF * dt, s.pw * 0.45, W - s.pw * 0.45);
       }
-      s.y = H * 0.26 + Math.sin(s.t * 2) * 4;
+      s.y = s.hy + Math.sin(s.t * 2) * 3;
       s.waterY = H * 0.8 + Math.sin(s.t * 1.5) * 3;
       rainStep(s.rain, dt, W, H);
       s.logs.forEach(l => { l.x -= 18 * dt; if (l.x < -50) l.x = W + 30; });
@@ -704,7 +713,7 @@ const ARCADE = [
       s.swimmers = s.swimmers.filter(w => w.x < W + 30);
       if (L.birds && (s.bspawn -= dt) <= 0) {
         const fromLeft = chance(0.5);
-        s.birds.push({ x: fromLeft ? -20 : W + 20, y: s.y + rnd(-25, 25), vx: (fromLeft ? 1 : -1) * W * 0.3, ph: rnd(0, TAU) });
+        s.birds.push({ x: fromLeft ? -20 : W + 20, y: rnd(H * 0.16, H * 0.42), vx: (fromLeft ? 1 : -1) * W * 0.28, ph: rnd(0, TAU) });
         s.bspawn = rnd(2.5, 4.5) / L.birds;
       }
       s.birds.forEach(b => {
@@ -783,11 +792,12 @@ const ARCADE = [
     setup(s, a) { this.next(s, a.W, a.H); },
     next(s, W, H) {
       const rw = 950 + rnd(0, 200), G = H * 0.8, y0 = H * 0.22, wheel = s.pw * 0.17;
-      const ideal = d => y0 + (G - wheel - y0) * clamp(d / (rw + 40), 0, 1);
+      const rwL = Math.max(320, W * s.L.rwL), td = rw + Math.min(110, rwL * 0.28); // точка касания — в начале полосы, с запасом
+      const ideal = d => y0 + (G - wheel - y0) * clamp(d / td, 0, 1);
       const stars = [];
       for (let d = 220; d < rw - 60; d += 160) stars.push({ d, y: ideal(d), got: false });
       const birds = s.L.birds ? [{ d: rnd(450, rw - 250), y: rnd(H * 0.3, H * 0.6), hit: false }] : [];
-      Object.assign(s, { x: W * 0.3, y: y0, vy: 0, dist: 0, phase: 'fly', roll: 0, rw, rwL: Math.max(320, W * s.L.rwL), sp: 125, gust: 1.5, msg: '', goAround: false, landed: false, y0, ideal, stars, birds });
+      Object.assign(s, { x: W * 0.3, y: y0, vy: 0, dist: 0, phase: 'fly', roll: 0, rw, rwL, sp: 125, gust: 1.5, msg: '', goAround: false, landed: false, y0, ideal, stars, birds });
     },
     box: s => ({ x: s.x, y: s.y, hw: s.pw * 0.4, hh: s.pw * 0.12 }),
     bonus: (s, a) => (s.phase === 'fly' && s.dist < s.rw - 500 ? { x: a.W + 20, y: s.ideal(s.dist + a.W + 20 - s.x), vx: -s.sp, vy: 0, still: true } : null),
@@ -817,14 +827,14 @@ const ARCADE = [
         });
         if (s.phase === 'fly' && s.y + wheel >= G) {
           s.y = G - wheel;
-          const onRw = s.dist >= s.rw && s.dist <= s.rw + s.rwL;
+          const onRw = s.dist >= s.rw - 25 && s.dist <= s.rw + s.rwL;
           let pts = 0, msg;
           if (!onRw) msg = s.dist < s.rw ? 'Мимо полосы!' : 'Полоса закончилась!';
           else if (s.vy < 25) { pts = 30; msg = 'Мягкая посадка! ⭐⭐⭐'; }
           else if (s.vy < 40) { pts = 20; msg = 'Хорошая посадка! ⭐⭐'; }
           else if (s.vy < 56) { pts = 10; msg = 'Жестковато… ⭐'; }
           else msg = 'Жёсткая посадка!';
-          if (pts && s.dist < s.rw + s.rwL * 0.35) { pts += 5; msg += ' +5'; }
+          if (pts && s.dist > s.rw && s.dist < s.rw + s.rwL * 0.45) { pts += 5; msg += ' +5'; }
           s.msg = msg;
           s.phase = 'roll'; s.roll = 2.2; s.vy = 0;
           burst(s, s.x - s.pw * 0.1, G, '#d5dae1', 12, 60);
@@ -900,17 +910,17 @@ const ARCADE = [
     how: 'Лес горит! Нажимай — самолёт сбрасывает воду. Сбрасывай чуть заранее. Вода кончилась — пролети над озером. Из леса выбегают зайцы: потуши огонь рядом с ними — и они спасены. Дальше: ветер, огонь перекидывается, молнии.',
     goal: L => `Цель: потуши ${L.goal} пожаров`,
     levels: [
-      { goal: 5, sp: 0.27, every: 1.9, wind: 0, hares: 0, spread: 0, bolt: 0, news: 'Бак — 4 сброса. Над озером наполняется' },
-      { goal: 7, sp: 0.29, every: 1.7, wind: 0, hares: 1, spread: 0, bolt: 0, news: 'Из леса выбегают зайцы — спаси их: +3!' },
-      { goal: 9, sp: 0.31, every: 1.5, wind: 1, hares: 1, spread: 0, bolt: 0, news: 'Ветер сносит воду — смотри на надпись' },
-      { goal: 11, sp: 0.33, every: 1.35, wind: 1, hares: 1, spread: 1, bolt: 0, news: 'Огонь растёт и перекидывается!' },
-      { goal: 13, sp: 0.35, every: 1.2, wind: 1, hares: 1, spread: 1, bolt: 1, news: 'Молнии поджигают лес!' },
+      { goal: 5, sp: 0.27, every: 2, wind: 0, hares: 0, spread: 0, bolt: 0, news: 'Бак — 6 сбросов. Над озером наполняется' },
+      { goal: 7, sp: 0.29, every: 1.85, wind: 0, hares: 1, spread: 0, bolt: 0, news: 'Из леса выбегают зайцы — спаси их: +3!' },
+      { goal: 9, sp: 0.31, every: 1.75, wind: 1, hares: 1, spread: 0, bolt: 0, news: 'Ветер сносит воду — смотри на надпись' },
+      { goal: 11, sp: 0.33, every: 1.65, wind: 1, hares: 1, spread: 1, bolt: 0, news: 'Огонь растёт и перекидывается!' },
+      { goal: 13, sp: 0.35, every: 1.55, wind: 1, hares: 1, spread: 1, bolt: 1, news: 'Молнии поджигают лес!' },
     ],
     start(W, H) {
       const trees = Array.from({ length: 12 }, (_, i) => ({ x: i * (W / 10) + rnd(0, 14), h: rnd(16, 26) }));
-      return base({ x: W * 0.3, y: H * 0.3, pw: pwOf(W) * 1.1, tank: 4, drops: [], fires: [], lakes: [], hares: [], trees, wind: 0 });
+      return base({ x: W * 0.3, y: H * 0.3, pw: pwOf(W) * 1.1, tank: 6, drops: [], fires: [], lakes: [], hares: [], trees, wind: 0 });
     },
-    setup(s) { s.drops = []; s.fires = []; s.lakes = []; s.hares = []; s.tank = 4; s.fspawn = 1; s.lspawn = 4; s.windT = 0; s.wind = 0; s.boltT = 5; s.flash = 0; s.strike = null; },
+    setup(s) { s.drops = []; s.fires = []; s.lakes = []; s.hares = []; s.tank = 6; s.fspawn = 1; s.lspawn = 3.5; s.windT = 0; s.wind = 0; s.boltT = 5; s.flash = 0; s.strike = null; },
     box: s => ({ x: s.x, y: s.y, hw: s.pw * 0.4, hh: s.pw * 0.14 }),
     bonus: (s, a) => ({ x: a.W + 20, y: s.y + rnd(-15, 15), vx: -a.W * s.L.sp, vy: 0 }),
     newFire(s, x, size = 0.6) {
@@ -925,7 +935,7 @@ const ARCADE = [
       s.flash = Math.max(0, s.flash - dt);
       if (L.wind && (s.windT -= dt) <= 0) { s.wind = (chance(0.5) ? -1 : 1) * rnd(0.5, 1); s.windT = rnd(5, 8); }
       s.trees.forEach(t => { t.x -= sp * dt; if (t.x < -20) { t.x += W * 1.2; t.h = rnd(16, 26); } });
-      if ((s.lspawn -= dt) <= 0) { s.lakes.push({ x: W + 10, w: 130 }); s.lspawn = rnd(6, 8); }
+      if ((s.lspawn -= dt) <= 0) { s.lakes.push({ x: W + 10, w: 130 }); s.lspawn = rnd(5, 6.5); }
       if ((s.fspawn -= dt) <= 0) {
         const x = W + 20;
         if (!s.lakes.some(l => x > l.x - 30 && x < l.x + l.w + 30)) this.newFire(s, x);
@@ -934,12 +944,12 @@ const ARCADE = [
       if (L.bolt && (s.boltT -= dt) <= 0) {
         const x = W * rnd(0.6, 0.95);
         if (!s.lakes.some(l => x > l.x - 20 && x < l.x + l.w + 20)) { s.strike = { x, t: 0.3 }; s.flash = 0.2; sfx.thunder(); this.newFire(s, x, 0.8); }
-        s.boltT = rnd(4, 6);
+        s.boltT = rnd(5, 7);
       }
       if (s.strike) { s.strike.x -= sp * dt; if ((s.strike.t -= dt) <= 0) s.strike = null; }
       s.lakes.forEach(l => { l.x -= sp * dt; });
       s.lakes = s.lakes.filter(l => l.x + l.w > -10);
-      if (s.tank < 4 && s.lakes.some(l => s.x > l.x && s.x < l.x + l.w)) { s.tank = 4; sfx.splash(); say(s, s.x, s.y + 40, 'Бак полон! 💧'); }
+      if (s.tank < 6 && s.lakes.some(l => s.x > l.x && s.x < l.x + l.w)) { s.tank = 6; sfx.splash(); say(s, s.x, s.y + 40, 'Бак полон! 💧'); }
       inp.taps.forEach(() => {
         if (s.tank > 0) {
           s.tank--;
@@ -1010,8 +1020,8 @@ const ARCADE = [
       s.hares.forEach(h => { if (h.out) hare(ctx, h.x, G - 2 - Math.abs(Math.sin(h.hop)) * 10); });
       s.drops.forEach(d => { ctx.fillStyle = '#3d8fe0'; ctx.beginPath(); ctx.ellipse(d.x, d.y, 6, 9, 0, 0, TAU); ctx.fill(); });
       drawSprite(ctx, a.img, s.x, s.y, s.pw, 0, false, blink(s));
-      for (let i = 0; i < 4; i++) {
-        const x = W - 18 - (3 - i) * 20, y = 52;
+      for (let i = 0; i < 6; i++) {
+        const x = W - 14 - (5 - i) * 16, y = 52;
         ctx.beginPath(); ctx.moveTo(x, y - 9); ctx.quadraticCurveTo(x + 8, y + 1, x, y + 7); ctx.quadraticCurveTo(x - 8, y + 1, x, y - 9);
         ctx.fillStyle = i < s.tank ? '#3d8fe0' : 'rgba(255, 255, 255, .35)'; ctx.fill();
         ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke();
@@ -1027,10 +1037,10 @@ const ARCADE = [
     goal: L => (L.boss ? 'Цель: победи Короля Бурь (30 попаданий)' : `Цель: сбей ${L.goal} врагов`),
     extraBonus: ['gun', 'gun'],
     levels: [
-      { goal: 8, every: 1.2, big: 0.1, zig: 0, kami: 0, boss: 0, news: 'Сбивай дроны-хулиганы' },
-      { goal: 12, every: 1.05, big: 0.2, zig: 0, kami: 0, boss: 0, news: 'Злые тучки: 3 попадания, внутри тучки-малыши!' },
-      { goal: 15, every: 0.95, big: 0.22, zig: 1, kami: 0, boss: 0, news: 'Быстрые дроны летят зигзагом' },
-      { goal: 18, every: 0.85, big: 0.25, zig: 1, kami: 1, boss: 0, news: 'Дроны-камикадзе летят прямо на тебя!' },
+      { goal: 8, every: 1.3, big: 0.1, zig: 0, kami: 0, boss: 0, news: 'Сбивай дроны-хулиганы' },
+      { goal: 10, every: 1.25, big: 0.2, zig: 0, kami: 0, boss: 0, news: 'Злые тучки: 3 попадания, внутри тучки-малыши!' },
+      { goal: 12, every: 1.15, big: 0.2, zig: 1, kami: 0, boss: 0, news: 'Быстрые дроны летят зигзагом' },
+      { goal: 14, every: 1.05, big: 0.22, zig: 1, kami: 1, boss: 0, news: 'Дроны-камикадзе летят прямо на тебя!' },
       { goal: 1, every: 1.8, big: 0, zig: 1, kami: 0, boss: 1, news: 'Босс! Уворачивайся от его молний' },
     ],
     start(W, H) {
@@ -1049,7 +1059,7 @@ const ARCADE = [
       sfx.boom();
       burst(s, f.x, f.y, f.big || f.baby ? '#8b97b8' : '#ff8a3d', 18, 150);
       if (f.big) { // выскакивают тучки-малыши
-        [-1, 1].forEach(d => s.foes.push({ baby: true, x: f.x, y: f.y, r: 11, hp: 1, vx: -a.W * 0.35, vy: d * a.H * 0.25, ph: 0 }));
+        [-1, 1].forEach(d => s.foes.push({ baby: true, x: f.x, y: f.y, r: 11, hp: 1, vx: -a.W * 0.22, vy: d * a.H * 0.4, ph: 0 }));
         say(s, f.x, f.y - 26, '+3');
       }
     },
@@ -1084,13 +1094,13 @@ const ARCADE = [
       }
       s.foes.forEach(f => {
         if (f.baby) { f.x += f.vx * dt; f.y += f.vy * dt; f.vy *= 1 - dt * 1.2; }
-        else if (f.type === 'kami') { f.x -= W * 0.42 * dt; f.y += clamp(s.y - f.y, -1, 1) * H * 0.18 * dt; }
-        else if (f.type === 'zig') { f.x -= W * 0.45 * dt; f.y += Math.cos(s.t * 6 + f.ph) * H * 0.35 * dt; }
+        else if (f.type === 'kami') { f.x -= W * 0.36 * dt; f.y += clamp(s.y - f.y, -1, 1) * H * 0.14 * dt; }
+        else if (f.type === 'zig') { f.x -= W * 0.38 * dt; f.y += Math.cos(s.t * 5 + f.ph) * H * 0.3 * dt; }
         else { f.x -= sp * (f.big ? 0.7 : 1) * dt; f.y += Math.sin(s.t * 2 + f.ph) * 30 * dt; }
         f.y = clamp(f.y, 14, H - 14);
         if (f.big && f.x < W - 20 && (f.shoot -= dt) <= 0) { s.bolts.push({ x: f.x - f.r, y: f.y, vx: -W * 0.55, vy: (s.y - f.y) * 0.4 }); f.shoot = rnd(1.6, 2.8); }
         s.bullets.forEach(bu => {
-          if (!bu.done && !f.dead && Math.hypot(bu.x - f.x, bu.y - f.y) < f.r) {
+          if (!bu.done && !f.dead && Math.hypot(bu.x - f.x, bu.y - f.y) < f.r + 5) {
             bu.done = true; f.hp--;
             burst(s, bu.x, bu.y, '#ffd23f', 4, 60);
             if (f.hp <= 0) this.kill(s, f, a);
@@ -1168,7 +1178,7 @@ const ARCADE = [
       { goal: 4, raft: 0.08, w: 1, wind: 0.6, dolphins: 1, gulls: 0, storm: 0, news: 'Подул ветер. Из воды выпрыгивают дельфины!' },
       { goal: 5, raft: 0.1, w: 0.95, wind: 0.9, dolphins: 1, gulls: 1, storm: 0, news: 'Чайки толкают парашют!' },
       { goal: 5, raft: 0.12, w: 0.8, wind: 1.1, dolphins: 1, gulls: 1, storm: 0, news: 'Плот стал меньше и быстрее' },
-      { goal: 6, raft: 0.14, w: 0.75, wind: 1.3, dolphins: 1, gulls: 1, storm: 1, news: 'Шторм: ветер меняется прямо в полёте!' },
+      { goal: 6, raft: 0.14, w: 0.75, wind: 1.3, dolphins: 1, gulls: 1, storm: 1, news: 'Шторм: сильный ветер и волны' },
     ],
     start(W, H) {
       return base({ pw: pwOf(W) * 1.25, plane: null, box: null, wind: 0, raft: { x: W * 0.6, dir: 1, w: Math.min(110, W * 0.3) }, gulls: [], dolphins: [], rain: makeRain(W, H, 50) });
@@ -1214,7 +1224,6 @@ const ARCADE = [
       const b = s.box;
       if (b) {
         b.t += dt;
-        if (L.storm && b.open && chance(dt * 0.8)) { s.wind = Math.round(rnd(-1, 1) * L.wind * 10) / 10; say(s, W / 2, 96, 'Ветер сменился!', '#fff6c2'); }
         if (b.t > 0.35) {
           b.open = true;
           b.vx += (s.wind * W * 0.09 - b.vx) * Math.min(1, dt * 1.8);
@@ -1223,7 +1232,7 @@ const ARCADE = [
         b.x += b.vx * dt; b.y += b.vy * dt;
         s.gulls.forEach(g => {
           if (!g.hit && b.open && Math.abs(g.x - b.x) < 24 && Math.abs(g.y - (b.y - 26)) < 22) {
-            g.hit = true; b.vx += Math.sign(g.vx) * W * 0.25; say(s, b.x, b.y - 50, 'Ка-ка!', '#fff'); sfx.flap();
+            g.hit = true; b.vx += Math.sign(g.vx) * W * 0.12; say(s, b.x, b.y - 50, 'Ка-ка!', '#fff'); sfx.flap();
           }
         });
         if (b.y >= sea - 12) {
@@ -1302,13 +1311,13 @@ const ARCADE = [
       { goal: 14, m0: 0.8, m1: 1.4, two: 0.3, mover: 0, bolt: 0, news: 'Быстрее! Преодолей звуковой барьер' },
       { goal: 18, m0: 1, m1: 1.6, two: 0.35, mover: 1, bolt: 0, news: 'Метеозонды перескакивают в соседний коридор!' },
       { goal: 22, m0: 1.2, m1: 1.8, two: 0.4, mover: 1, bolt: 1, news: 'Молнии в коридоре — смотри на мигание!' },
-      { goal: 26, m0: 1.4, m1: 2, two: 0.45, mover: 1, bolt: 1, news: 'Почти две скорости звука!' },
+      { goal: 26, m0: 1.4, m1: 2, two: 0.4, mover: 1, bolt: 1, news: 'Почти две скорости звука!' },
     ],
     start(W, H) {
       const lines = Array.from({ length: 14 }, () => ({ x: rnd(0, W), y: rnd(0, H), l: rnd(20, 60) }));
       return base({ lane: 1, x: W * 0.22, y: H * 0.52, pw: pwOf(W) * 1.15, rows: [], mach: 0.6, boomed: false, boomT: 0, lines });
     },
-    setup(s) { s.rows = []; s.spawn = 1.2; s.mach = s.L.m0; s.boltT = 4; s.zap = null; s.boomed = s.mach >= 1; },
+    setup(s) { s.rows = []; s.spawn = 1.2; s.mach = s.L.m0; s.boltT = 4; s.zap = null; s.boomed = s.mach >= 1; s.lastFree = s.lane; },
     lanes(H) { return [H * 0.3, H * 0.52, H * 0.74]; },
     box: s => ({ x: s.x, y: s.y, hw: s.pw * 0.42, hh: s.pw * 0.15 }),
     bonus(s, a) { return { x: a.W + 20, y: this.lanes(a.H)[Math.floor(rnd(0, 3))], vx: -a.W * (0.35 + s.mach * 0.32), vy: 0, still: true }; },
@@ -1326,9 +1335,17 @@ const ARCADE = [
       s.lines.forEach(l => { l.x -= sp * 1.6 * dt; if (l.x < -l.l) { l.x = W + rnd(0, 40); l.y = rnd(0, H); } });
       if ((s.spawn -= dt) <= 0) {
         const n = chance(L.two) ? 2 : 1;
-        const lanes = shuffle([0, 1, 2]);
+        let lanes = shuffle([0, 1, 2]);
+        if (n === 2) {
+          // свободный коридор: рядом с прошлым свободным (не надо прыгать через два) и не под молнией
+          const prev = s.lastFree == null ? 1 : s.lastFree;
+          const ok = [0, 1, 2].filter(l => Math.abs(l - prev) <= 1 && !(s.zap && s.zap.lane === l));
+          const f = ok.length ? pick(ok) : prev;
+          lanes = [0, 1, 2].filter(l => l !== f).concat(f);
+          s.lastFree = f;
+        }
         const blocked = lanes.slice(0, n), free = lanes.slice(n);
-        const mover = L.mover && n === 1 && chance(0.35);
+        const mover = L.mover && n === 1 && !s.zap && chance(0.35);
         s.rows.push({
           x: W + 40, lanes: blocked, types: blocked.map(() => (mover ? 'probe' : pick(['balloon', 'cloud', 'birds']))),
           star: chance(0.7) ? free[0] : null, passed: false, hit: false,
@@ -1336,7 +1353,13 @@ const ARCADE = [
         });
         s.spawn = Math.max(0.75, 1.5 - s.mach * 0.25);
       }
-      if (L.bolt && !s.zap && (s.boltT -= dt) <= 0) s.zap = { lane: Math.floor(rnd(0, 3)), warn: 1.1, strike: 0.35 };
+      if (L.bolt && !s.zap && (s.boltT -= dt) <= 0) {
+        // нельзя бить в коридор, который для ближайших препятствий единственный свободный
+        const banned = new Set();
+        s.rows.forEach(r => { if (r.x > s.x - 60 && r.lanes.length + (r.move ? 1 : 0) >= 2) [0, 1, 2].forEach(l => { if (!r.lanes.includes(l) && !(r.move && r.move.to === l)) banned.add(l); }); });
+        const ok = [0, 1, 2].filter(l => !banned.has(l));
+        if (ok.length) s.zap = { lane: pick(ok), warn: 1.2, strike: 0.35 }; else s.boltT = 0.5;
+      }
       if (s.zap) {
         const z = s.zap;
         if (z.warn > 0) { z.warn -= dt; if (z.warn <= 0) sfx.thunder(); }
@@ -1613,8 +1636,9 @@ function renderArcade() {
   }).join('');
   const next = PLANES.find(p => p.level > lv);
   $('gamesHint').textContent = next
-    ? `Следующая игра «${next.game}» откроется с самолётом ${next.name}: ${unlockText(next.level).toLowerCase()}.`
+    ? `Сдано экзаменов: ${data.exams.length} из ${NUMBERS.length}. Следующая игра «${next.game}» откроется с самолётом ${next.name} — ${unlockText(next.level).toLowerCase()}.`
     : 'Все игры открыты! Ты настоящая легенда неба! 👑';
+  $('arcadeExamBtn').classList.toggle('hidden', !next);
 }
 
 function openArcade() {
@@ -1641,6 +1665,7 @@ function startLevel(s, n) {
   const g = arc.game, L = g.levels[n - 1];
   s.level = n; s.prog = 0; s.goal = L.goal; s.L = L; s.lt = 0;
   s.inv = Math.max(s.inv, 1.2);
+  s.lives = Math.max(s.lives, 3); // каждый уровень — минимум с тремя жизнями
   s.bonuses = []; s.bonusT = rnd(5, 8);
   g.setup(s, arc, L, n);
   s.banner = { title: `Уровень ${n}`, sub: g.goal(L) + '\n' + L.news, t: 2.8, max: 2.8 };
@@ -1881,12 +1906,13 @@ function arcadeStop() {
   document.addEventListener('keyup', e => { if (e.code === 'Space' || e.key === 'ArrowUp') arc.inp.down = false; });
 
   $('arcadeBtn').addEventListener('click', openArcade);
+  $('arcadeExamBtn').addEventListener('click', openExams);
   $('games').addEventListener('click', e => {
     const t = e.target.closest('[data-game]');
     if (!t) return;
     const i = Number(t.dataset.game);
     if (level() < PLANES[i].level) {
-      $('gamesHint').textContent = `«${PLANES[i].game}» откроется с самолётом ${PLANES[i].name}: ${unlockText(PLANES[i].level).toLowerCase()}. Экзамен — это бой с Боссом на одном числе.`;
+      $('gamesHint').textContent = `«${PLANES[i].game}» откроется с самолётом ${PLANES[i].name} — ${unlockText(PLANES[i].level).toLowerCase()}. Нажми «🎓 Сдать экзамен» ниже.`;
       return;
     }
     openGame(i);
